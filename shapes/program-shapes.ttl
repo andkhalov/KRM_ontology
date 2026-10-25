@@ -1,0 +1,102 @@
+# program-shapes.ttl — SHACL: связка «студент → ОП → заявленные вузом КИУ и ИПД/ПЗ».
+# Не входит в owl:imports зонтика (валидация, не схема).
+#
+# Здесь сторожатся два инварианта, без которых вся цепочка порождения теряет смысл:
+#   1. Студент учится РОВНО НА ОДНОЙ ОП, и назначенный ему профиль тестирования — профиль ЭТОЙ ОП
+#      (иначе студента проверяли бы по КИУ чужой программы).
+#   2. Задание, попавшее в вариант теста студента, специфицировано ИПД и ПЗ, которые ЗАЯВИЛ ВУЗ
+#      по этому КИУ (иначе студенту дадут задачу на инструменте, которому его не учили).
+# Второй инвариант раньше существовал только прозой в rdfs:comment — теперь он проверяем.
+
+@prefix krm:  <http://example.org/krm#> .
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/krm/shapes/program> a owl:Ontology ;
+    sh:declare [ sh:prefix "krm" ; sh:namespace "http://example.org/krm#"^^xsd:anyURI ] ,
+               [ sh:prefix "xsd" ; sh:namespace "http://www.w3.org/2001/XMLSchema#"^^xsd:anyURI ] .
+
+############################ СТУДЕНТ → ОП (АРНОСТЬ СТРОГО 1) ############################
+
+krm:StudentProgramShape a sh:NodeShape ;
+    sh:targetClass krm:Student ;
+    sh:property [ sh:path krm:studentProgram ; sh:minCount 1 ; sh:maxCount 1 ;
+                  sh:class krm:EducationalProgram ;
+                  sh:message "У студента должна быть ровно одна образовательная программа (krm:studentProgram)."@ru ] ;
+    sh:property [ sh:path krm:hasTestingProfile ; sh:minCount 1 ; sh:maxCount 1 ;
+                  sh:class krm:ProgramTestingProfile ;
+                  sh:message "Студенту должен быть назначен ровно один профиль тестирования."@ru ] .
+
+# Профиль студента обязан быть профилем ЕГО программы.
+krm:StudentProfileConsistencyShape a sh:NodeShape ;
+    sh:targetClass krm:Student ;
+    sh:sparql [
+        sh:message "Назначенный студенту профиль относится к ОП {?profileProgram}, а студент учится на {?studentProgram} — студента будут проверять по КИУ чужой программы."@ru ;
+        sh:select """
+            SELECT $this ?studentProgram ?profileProgram WHERE {
+                $this krm:studentProgram ?studentProgram .
+                $this krm:hasTestingProfile ?prof .
+                ?prof krm:forProgram ?profileProgram .
+                FILTER (?studentProgram != ?profileProgram)
+            }""" ] .
+
+############################ ИПД / ПЗ ЗАДАНИЯ ⊆ ЗАЯВЛЕННЫХ ВУЗОМ ############################
+# Проверяется на уровне варианта теста: у КАЖДОГО включённого варианта задания фактический ИПД/ПЗ
+# должен входить в декларации профиля студента ПО ТОМУ ЖЕ КИУ. Путь до КИУ — явный
+# (ofTemplate → forDescriptor → specializes → fromKIU), без опоры на вывод ризонера.
+
+krm:TestVariantToolShape a sh:NodeShape ;
+    sh:targetClass krm:TestVariant ;
+    sh:severity sh:Warning ;   # гейт готовности: на неполном каркасе нарушения — норма
+    sh:sparql [
+        sh:message "Вариант {?v} использует ИПД {?tool}, не заявленный вузом по КИУ {?kiu} для программы студента."@ru ;
+        sh:select """
+            SELECT $this ?v ?tool ?kiu WHERE {
+                $this krm:forStudent ?s .
+                ?s krm:hasTestingProfile ?prof .
+                $this krm:includesVariant ?v .
+                ?v krm:actualTool ?tool .
+                ?v krm:ofTemplate/krm:forDescriptor/krm:specializes/krm:fromKIU ?kiu .
+                FILTER NOT EXISTS {
+                    ?prof krm:hasEntry ?e .
+                    ?e krm:forKIU ?kiu ; krm:declaresTool [ krm:tool ?tool ] .
+                }
+            }""" ] ;
+    sh:sparql [
+        sh:message "Вариант {?v} использует ПЗ {?subj}, не заявленный вузом по КИУ {?kiu} для программы студента."@ru ;
+        sh:select """
+            SELECT $this ?v ?subj ?kiu WHERE {
+                $this krm:forStudent ?s .
+                ?s krm:hasTestingProfile ?prof .
+                $this krm:includesVariant ?v .
+                ?v krm:actualSubject ?subj .
+                ?v krm:ofTemplate/krm:forDescriptor/krm:specializes/krm:fromKIU ?kiu .
+                FILTER NOT EXISTS {
+                    ?prof krm:hasEntry ?e .
+                    ?e krm:forKIU ?kiu ; krm:declaresSubject [ krm:subject ?subj ] .
+                }
+            }""" ] .
+
+# Язык код-задания — тоже ИПД: он обязан быть среди заявленных вузом по этому КИУ.
+krm:TestVariantLanguageShape a sh:NodeShape ;
+    sh:targetClass krm:TestVariant ;
+    sh:severity sh:Warning ;
+    sh:sparql [
+        sh:message "Задание {?t} требует язык {?lang}, не заявленный вузом по КИУ {?kiu} для программы студента."@ru ;
+        sh:select """
+            SELECT $this ?t ?lang ?kiu WHERE {
+                $this krm:forStudent ?s .
+                ?s krm:hasTestingProfile ?prof .
+                $this krm:includesVariant ?v .
+                ?v krm:ofTemplate ?t .
+                ?t krm:language ?lang .
+                ?t krm:forDescriptor/krm:specializes/krm:fromKIU ?kiu .
+                FILTER NOT EXISTS {
+                    ?prof krm:hasEntry ?e .
+                    ?e krm:forKIU ?kiu ; krm:declaresTool [ krm:tool ?lang ] .
+                }
+            }""" ] .
+
+# Квота доли практико-ориентированных (ось 60/40) перенесена в cascade-shapes.ttl —
+# её место рядом с остальными квотами варианта теста, а не в связке «студент → ОП».

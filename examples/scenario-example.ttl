@@ -1,0 +1,93 @@
+# scenario-example.ttl — сквозной A-Box по слоям planning/assessment/process,
+# чтобы протестировать CQ и пользовательские сценарии end-to-end.
+# Дополняет krm-core-example.ttl и actors-kim-example.ttl (использует их индивиды).
+
+@prefix krm:  <http://example.org/krm#> .
+@prefix kid:  <http://example.org/krm/id/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+# цикл и версия КРМ
+kid:Cycle_2026 a krm:Cycle ; krm:code "2026" ; krm:year 2026 ; rdfs:label "Апробация 2026"@ru .
+kid:KRM_2_0 a krm:KRMVersion ; krm:code "KRM-2.0" ; rdfs:label "КРМ 2.0 (декабрь 2025)"@ru .
+
+# ассессмент (экзамен целиком) — аккумулирующий корень: когорта + матрица + очередь + ВТ
+kid:Assess_2026_1 a krm:Assessment ; krm:code "ASSESS-2026-Y1" ;
+    rdfs:label "Ассесмент 1 курса, осень 2026"@ru ;
+    krm:inCycle kid:Cycle_2026 ; krm:underKRMVersion kid:KRM_2_0 ;
+    krm:assessmentStatus krm:AST_Generation ;
+    krm:windowStart "2026-09-01T00:00:00"^^xsd:dateTime ; krm:windowEnd "2026-09-30T23:59:59"^^xsd:dateTime ;
+    krm:coversProgram kid:OP_1 ; krm:usesProfile kid:Profile_1 ; krm:enrolls kid:Stud_1 ;
+    krm:hasDemand kid:Dem_1 ; krm:hasWorkItem kid:WI_1 ; krm:hasTestVariant kid:TV_1 ;
+    krm:hasPolicy kid:Policy_1 .
+# coversUniversity (→ Univ_Example) и assessmentKIU (→ KIU_MF-1_MF-1.1_B) выводятся цепочками.
+
+# --- ПОЛИТИКА СБОРКИ ВТ: правила сборки — данные ассессмента, а не константы схемы ---
+# Диапазоны сумм по заданиям + квоты долей по типам. Правило «20% с экспертной проверкой /
+# 80% автопроверяемых» выражено одной квотой: экспертной проверки требует РОВНО ОДИН тип —
+# открытый текстовый (krm:TT_OpenText), значит его доля ≤ 0,2.
+kid:Policy_1 a krm:AssemblyPolicy ; krm:code "POLICY-2026-Y1-DS" ;
+    rdfs:label "Политика сборки ВТ: 1 курс, уровень ДС"@ru ;
+    krm:minTaskCount 20 ; krm:maxTaskCount 40 ;
+    krm:minDuration 150 ; krm:maxDuration 180 ;
+    krm:minDifficultySum 40 ; krm:maxDifficultySum 120 ;
+    krm:minScoreSum 100.0 ; krm:maxScoreSum 400.0 ;
+    krm:minPracticeShare 0.6 ; krm:maxPracticeShare 1.0 ;
+    krm:minPriorLevelShare 0.10 ; krm:maxPriorLevelShare 0.15 ;
+    krm:hasQuota kid:Q_open , kid:Q_single , kid:Q_multi , kid:Q_code .
+
+kid:Q_open   a krm:Quota ; krm:quotaOn krm:TT_OpenText      ; krm:minShare 0.10 ; krm:maxShare 0.20 .
+kid:Q_single a krm:Quota ; krm:quotaOn krm:TT_SingleChoice   ; krm:minShare 0.15 ; krm:maxShare 0.40 .
+kid:Q_multi  a krm:Quota ; krm:quotaOn krm:TT_MultipleChoice ; krm:minShare 0.10 ; krm:maxShare 0.30 .
+kid:Q_code   a krm:Quota ; krm:quotaOn krm:TT_Code           ; krm:minShare 0.20 ; krm:maxShare 0.50 .
+
+# веса рекомпозиции
+krm:Level_B krm:levelWeight 1.0 .
+kid:MF-1.1 krm:prevalenceWeight 1.0 .
+krm:TT_Code krm:taskTypeWeight 1.0 .
+
+# датасет (объект исследования) + признаки + ракурс; шаблон строится на ракурсе
+kid:DS_Housing a krm:Dataset ; krm:code "DS-HOUSING" ; rdfs:label "Жилищный датасет"@ru ;
+    krm:datasetFormat krm:DF_Tabular ; krm:datasetDomain kid:Subj_Regression ;
+    krm:rowCount 506 ; krm:accessRef "file://datasets/housing.csv" ; krm:license "CC-BY 4.0" ;
+    krm:datasetSource kid:Src_RPD1 ; krm:hasFeature kid:F_price , kid:F_area ; krm:inCycle kid:Cycle_2026 .
+kid:F_price a krm:DatasetFeature ; krm:featureName "price" ; krm:featureDataType "float" ; krm:featureRole krm:FR_Target .
+kid:F_area  a krm:DatasetFeature ; krm:featureName "area"  ; krm:featureDataType "float" ; krm:featureRole krm:FR_Predictor .
+kid:DP_reg a krm:DatasetPerspective ; krm:ofDataset kid:DS_Housing ; krm:targetsFeature kid:F_price ;
+    krm:analyticTaskKind krm:AK_Regression ; krm:perspectiveDescription "Предсказание цены по признакам (регрессия)."@ru .
+kid:Tmpl_1 krm:usesPerspective kid:DP_reg .   # usesDataset → DS_Housing выводится цепочкой
+
+# очередь генерации (workitem)
+kid:WI_1 a krm:WorkItem ; krm:code "WI-1" ; krm:workKind krm:WK_Variant ;
+    krm:targetDescriptor kid:Desc_1 ; krm:assignedTo kid:Exp_1 ; krm:authoringMode krm:AM_AgentReview ;
+    krm:workStatus krm:WS_Accepted ; krm:priority 1 .
+
+# потребность по КИУ
+kid:Dem_1 a krm:KIUDemand ; krm:demandForKIU kid:KIU_MF-1_MF-1.1_B ;
+    krm:studentCount 1 ; krm:requiredVariants 2 .
+
+# провенанс генерации варианта
+kid:Agent_1 a krm:SystemAgent ; rdfs:label "Генеративный агент"@ru .
+kid:GA_1 a krm:GenerationActivity ; krm:byAgent kid:Agent_1 ;
+    krm:usedContext kid:KIU_MF-1_MF-1.1_B , kid:Desc_1 .
+kid:Var_1 krm:wasGeneratedBy kid:GA_1 .
+kid:Val_1 a krm:Validation ; krm:validationOf kid:Var_1 ; krm:passed true .
+
+# прохождение и ответ
+kid:At_1 a krm:Attempt ; krm:code "AT-1" ; krm:ofTestVariant kid:TV_1 ; krm:seed "S-0001#sit" .
+kid:Ans_1 a krm:Answer ; krm:toVariant kid:Var_1 ; krm:inAttempt kid:At_1 ;
+    krm:rawScore 9 ; krm:normalizedScore 90 ; krm:checkedByContour krm:CC_Auto .
+
+# баллы рекомпозиции по узлам (для конкретного студента)
+kid:Sc_desc a krm:Score ; krm:scoreOf kid:Desc_1 ; krm:forStudent kid:Stud_1 ; krm:scoreValue 90 .
+kid:Sc_kiu  a krm:Score ; krm:scoreOf kid:KIU_MF-1_MF-1.1_B ; krm:forStudent kid:Stud_1 ; krm:scoreValue 90 .
+kid:Sc_ind  a krm:Score ; krm:scoreOf kid:MF-1.1 ; krm:forStudent kid:Stud_1 ; krm:scoreValue 90 ; krm:achievementStatus krm:AS_Achieved .
+kid:Sc_comp a krm:Score ; krm:scoreOf kid:MF-1 ; krm:forStudent kid:Stud_1 ; krm:scoreValue 90 ; krm:achievementStatus krm:AS_Achieved .
+kid:Sc_role a krm:Score ; krm:scoreOf kid:DataAnalyst ; krm:forStudent kid:Stud_1 ; krm:scoreValue 90 .
+kid:Sc_tv   a krm:Score ; krm:scoreOf kid:TV_1 ; krm:forStudent kid:Stud_1 ; krm:scoreValue 90 .
+
+# порог, индивидуальный профиль, федеральный показатель, апелляция
+kid:Thr_ind a krm:Threshold ; krm:minScore 60 ; krm:minCompletion 0.7 .
+kid:IP_1 a krm:IndividualProfile ; krm:forStudent kid:Stud_1 .
+kid:FI_1 a krm:FederalIndicator ; rdfs:label "Доля достигших порога, 2026"@ru .
+kid:Ap_1 a krm:Appeal ; krm:appealOf kid:At_1 .

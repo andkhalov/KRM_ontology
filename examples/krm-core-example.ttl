@@ -1,0 +1,55 @@
+# krm-core-example.ttl — минимальный A-Box для проверки T-Box krm-core.
+# Один путь КРМ: домен → блок → компетенция (MF-1) → индикатор (MF-1.1) →
+# КИУ (MF-1_MF-1.1_Б) с гранулярными темой/источником/кейсом + роль-требование.
+# IRI чеканятся из кодов (детерминизм).
+
+@prefix krm:  <http://example.org/krm#> .
+@prefix kid:  <http://example.org/krm/id/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+# Домен берём из справочника krm:domains (krm-core), а не создаём свой.
+kid:Block_MathFoundations a krm:Block ; skos:inScheme krm:blocks ;
+    krm:inDomain krm:Domain_Professional ;
+    skos:prefLabel "Математические основы ИИ"@ru , "Mathematical foundations of AI"@en .
+
+kid:Dir_ProbStat a krm:Direction ; skos:inScheme krm:directions ;
+    skos:prefLabel "Основы теории вероятностей и математической статистики"@ru ,
+        "Foundations of probability theory and mathematical statistics"@en .
+
+kid:MF-1 a krm:Competence ;
+    krm:code "MF-1" ;
+    krm:inBlock kid:Block_MathFoundations ;
+    krm:hasDirection kid:Dir_ProbStat ;
+    rdfs:label "MF-1"@ru ;
+    krm:formulation "Способен применять современную теоретическую математику для разработки и применения методов ИИ."@ru .
+
+kid:MF-1.1 a krm:Indicator ;
+    krm:code "MF-1.1" ;
+    krm:indicatorOf kid:MF-1 ;
+    krm:formulation "Обосновывает способы и варианты применения методов и моделей в задачах ИИ."@ru .
+
+kid:KIU_MF-1_MF-1.1_B a krm:KIU ;
+    krm:code "MF-1_MF-1.1_Б" ;
+    krm:hasIndicator kid:MF-1.1 ;
+    krm:hasLevel krm:Level_B ;
+    krm:levelFormulation "Знает основные методы и модели ИИ, может объяснить их применение в стандартных задачах."@ru ;
+    krm:hasTopic kid:Topic_ProbTheory ;
+    krm:hasSource kid:Src_Myatlev ;
+    krm:hasCase kid:Case_MF11B ;
+    krm:hasLaborFunction kid:LF_DA_Research .
+
+kid:LF_DA_Research a krm:LaborFunction ; krm:ofRole kid:DataAnalyst ;
+    rdfs:label "Проводит исследования на данных, выдвигает и проверяет гипотезы"@ru .
+
+kid:Topic_ProbTheory a krm:Topic ; rdfs:label "Теория вероятностей"@ru .
+kid:Src_Myatlev a krm:Source ; rdfs:label "Мятлев В. Д. и др. Теория вероятностей и математическая статистика."@ru .
+kid:Case_MF11B a krm:CaseExample ; rdfs:label "Сравнительный анализ классических алгоритмов на предоставленных данных."@ru .
+
+kid:DataAnalyst a krm:Role ;
+    krm:code "DataAnalyst" ; rdfs:label "Аналитик данных (Data Analyst)"@ru .
+
+kid:Req_DataAnalyst_MF-1 a krm:RoleRequirement ;
+    krm:forRole kid:DataAnalyst ;
+    krm:onCompetence kid:MF-1 ;
+    krm:requiredLevel krm:Level_S .

@@ -1,0 +1,39 @@
+# krm_ontology.ttl — зонтичная онтология: единая точка входа, импортирует все одиннадцать модулей.
+# Импорты резолвятся офлайн через catalog-v001.xml (Protégé / OWL API); для rdflib и pyshacl — load_all.py.
+
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix dct:  <http://purl.org/dc/terms/> .
+@prefix vann: <http://purl.org/vocab/vann/> .
+
+dct:creator a owl:AnnotationProperty .
+dct:license a owl:AnnotationProperty .
+dct:issued a owl:AnnotationProperty .
+vann:preferredNamespacePrefix a owl:AnnotationProperty .
+vann:preferredNamespaceUri a owl:AnnotationProperty .
+
+<http://example.org/krm/ontology> a owl:Ontology ;
+    dct:title "Онтология КРМ: компетентностно-ролевая модель и оценивание компетенций"@ru ,
+        "KRM Ontology: competency-role model and competency assessment"@en ;
+    rdfs:label "Онтология КРМ (зонтик)"@ru , "KRM ontology (umbrella)"@en ;
+    owl:versionInfo "1.0.0" ;
+    dct:issued "2026-10-26" ;
+    dct:creator "Andrey P. Khalov" , "Denis V. Kustov" , "Olga M. Ataeva" , "Natalia P. Tuchkova" ;
+    dct:license <https://opensource.org/licenses/MIT> ;
+    vann:preferredNamespacePrefix "krm" ;
+    vann:preferredNamespaceUri "http://example.org/krm#" ;
+    rdfs:seeAlso <https://github.com/andkhalov/KRM_ontology> ;
+    owl:imports
+        <http://example.org/krm> ,
+        <http://example.org/krm/actors> ,
+        <http://example.org/krm/kim> ,
+        <http://example.org/krm/planning> ,
+        <http://example.org/krm/assessment> ,
+        <http://example.org/krm/process> ,
+        <http://example.org/krm/inferences> ,
+        <http://example.org/krm/definitions> ,
+        <http://example.org/krm/extensions> ,
+        <http://example.org/krm/campaign> ,
+        <http://example.org/krm/datasets> ;
+    dct:description "Онтология компетентностно-ролевой модели (КРМ) специалистов в области искусственного интеллекта и полного цикла оценивания компетенций: от дерева КРМ (домен, блок, компетенция, индикатор, уровень освоения, КИУ) через дескрипторы и задания до вариантов теста, прохождения и баллов. Модули: krm-core (КРМ и КИУ), actors (вузы, образовательные программы, студенты, эксперты, профили тестирования), kim (дескрипторы, обобщённые и конкретные задания, тесты), planning (спрос, варианты теста, очереди работ), assessment (прохождение, баллы, рекомпозиция), process (провенанс, валидация, приёмка, версии), inferences (обратные свойства и цепочки, OWL 2 RL), definitions (определённые классы и замкнутые перечни, OWL 2 DL), extensions (исходы, кейсы, аббревиатуры, отрасли), campaign (ассессмент как целое, политика сборки), datasets (наборы данных и ракурсы). Ограничения данных выражены формами SHACL (каталог shapes/)."@ru ,
+        "An ontology of the competency-role model (KRM) for artificial intelligence specialists and of the full competency-assessment cycle: from the KRM tree (domain, block, competence, indicator, mastery level, CIL — competence-indicator-level unit) through descriptors and tasks to test variants, sittings and scores. Modules: krm-core (KRM and CILs), actors (universities, educational programmes, students, experts, testing profiles), kim (descriptors, generalized and concrete tasks, tests), planning (demand, test variants, work queues), assessment (sittings, scores, recomposition), process (provenance, validation, acceptance, versions), inferences (inverse properties and property chains, OWL 2 RL), definitions (defined classes and closed enumerations, OWL 2 DL), extensions (learning outcomes, cases, abbreviations, industries), campaign (the assessment as a whole, assembly policy), datasets (datasets and perspectives). Data constraints are expressed as SHACL shapes (shapes/ directory)."@en .

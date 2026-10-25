@@ -1,0 +1,97 @@
+# extensions.ttl — выравнивание онтологии с гранулированной материализацией.
+# Покрывает то, что материализация добавила сверх базовой схемы: исходы «знать/уметь» КИУ,
+# структуру кейса (постановка/примеры/raw), трудовые действия роли, аббревиатуры, отрасли (ОПД).
+# Импортирует definitions (верхняя таксономия, resultTypes). Аннотации ru/en.
+
+@prefix krm:  <http://example.org/krm#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix dct:  <http://purl.org/dc/terms/> .
+
+<http://example.org/krm/extensions> a owl:Ontology ;
+    dct:title "Расширения схемы под гранулированную материализацию"@ru , "Schema extensions for granular materialization"@en ;
+    owl:versionInfo "1.0.0" ;
+    owl:imports <http://example.org/krm/definitions> ;
+    dct:description "Исходы «знать/уметь» КИУ, структура кейса, трудовые действия роли, аббревиатуры, отрасли (ОПД) — чтобы материализованные JSON полностью соответствовали онтологии."@ru ,
+        "CIL know/can-do outcomes, case structure, role duties, abbreviations, industries (ОПД) — so the materialized JSON fully matches the ontology."@en .
+
+############################ ИСХОДЫ «ЗНАТЬ/УМЕТЬ» КИУ ############################
+
+krm:LevelOutcome a owl:Class ;
+    rdfs:label "Исход уровня (знать/уметь)"@ru , "Level outcome (know/can-do)"@en ;
+    rdfs:comment "Отдельное утверждение из формулировки уровня КИУ (кандидат-исход «знать/уметь»). Сырьё для написания обобщённого дескриптора; финальные формулировки даёт эксперт. Принадлежит КРМ (дано извне), в отличие от дескрипторов (сделано нами)."@ru ,
+        "A single statement from a CIL's level formulation (a candidate know/can-do outcome). Raw material for authoring the general descriptor; the final wording comes from an expert. Belongs to the KRM (given from outside), unlike descriptors (made by us)."@en .
+
+krm:hasOutcome a owl:ObjectProperty ;
+    rdfs:domain krm:KIU ; rdfs:range krm:LevelOutcome ;
+    rdfs:label "исход уровня"@ru , "has outcome"@en .
+
+krm:outcomeText a owl:DatatypeProperty ;
+    rdfs:domain krm:LevelOutcome ; rdfs:range rdfs:Literal ;
+    rdfs:label "текст исхода"@ru , "outcome text"@en .
+
+krm:outcomeType a owl:ObjectProperty ;
+    rdfs:domain krm:LevelOutcome ; rdfs:range skos:Concept ;
+    rdfs:label "тип исхода"@ru , "outcome type"@en ;
+    rdfs:comment "знать / уметь / иное (krm:resultTypes)."@ru , "know / can-do / other (krm:resultTypes)."@en .
+
+krm:RT_Other a skos:Concept ; skos:inScheme krm:resultTypes ;
+    skos:prefLabel "иное"@ru , "other"@en .
+
+############################ СТРУКТУРА КЕЙСА ############################
+
+krm:caseStatement a owl:DatatypeProperty ;
+    rdfs:domain krm:CaseExample ; rdfs:range rdfs:Literal ;
+    rdfs:label "постановка кейса"@ru , "case statement"@en .
+
+krm:taskExample a owl:DatatypeProperty ;
+    rdfs:domain krm:CaseExample ; rdfs:range rdfs:Literal ;
+    rdfs:label "пример задания"@ru , "task example"@en ;
+    rdfs:comment "Отдельная задача из кейса (по уровням Б/С/П); множественное."@ru ,
+        "An individual task from a case (by levels B/S/P); multi-valued."@en .
+
+krm:rawText a owl:DatatypeProperty ;
+    rdfs:range rdfs:Literal ;
+    rdfs:label "исходный текст"@ru , "raw text"@en ;
+    rdfs:comment "Неразобранный оригинал (например, текст кейса) для трассируемости/без потерь."@ru ,
+        "The unparsed original (e.g. a case text) for traceability/losslessness."@en .
+
+############################ ТРУДОВЫЕ ДЕЙСТВИЯ РОЛИ ############################
+
+krm:duty a owl:DatatypeProperty ;
+    rdfs:domain krm:Role ; rdfs:range rdfs:Literal ;
+    rdfs:label "трудовое действие"@ru , "work duty"@en ;
+    rdfs:comment "Отдельное трудовое действие роли (гранула из списка «трудовые действия»); множественное. Сырой текст — в krm:roleDuties."@ru ,
+        "An individual work duty of a role (a granule from the duties list); multi-valued. Raw text in krm:roleDuties."@en .
+
+############################ АББРЕВИАТУРЫ (словарь) ############################
+
+krm:Abbreviation a owl:Class ;
+    rdfs:label "Аббревиатура / сокращение"@ru , "Abbreviation"@en ;
+    rdfs:comment "Запись словаря сокращений КРМ: код/сокращение + расшифровки (ru/en) + источник. Покрывает коды компетенций (SS, MF…) и общие сокращения (БД, КРМ…)."@ru ,
+        "An entry of the KRM abbreviation dictionary: code/abbr + expansions (ru/en) + source. Covers competence codes (SS, MF…) and general abbreviations."@en .
+
+krm:abbrTerm a owl:DatatypeProperty ; rdfs:domain krm:Abbreviation ; rdfs:range rdfs:Literal ;
+    rdfs:label "сокращение/код"@ru , "abbreviation/code"@en .
+krm:abbrExpansionRu a owl:DatatypeProperty ; rdfs:domain krm:Abbreviation ; rdfs:range rdfs:Literal ;
+    rdfs:label "расшифровка (рус)"@ru , "expansion (ru)"@en .
+krm:abbrExpansionEn a owl:DatatypeProperty ; rdfs:domain krm:Abbreviation ; rdfs:range rdfs:Literal ;
+    rdfs:label "расшифровка (англ)"@ru , "expansion (en)"@en .
+krm:abbrSource a owl:DatatypeProperty ; rdfs:domain krm:Abbreviation ; rdfs:range rdfs:Literal ;
+    rdfs:label "источник"@ru , "source"@en .
+
+############################ ОТРАСЛИ (ОПД) ############################
+
+krm:Industry a owl:Class ; rdfs:subClassOf skos:Concept ;
+    rdfs:label "Отрасль"@ru , "Industry"@en ;
+    rdfs:comment "Приоритетная отрасль экономики (перечень ОПД, 12). Контекст домена «отраслевые компетенции»."@ru ,
+        "A priority economic sector (the ОПД list, 12). Context of the industry-competencies domain."@en .
+
+krm:industries a skos:ConceptScheme ; rdfs:label "Отрасли (ОПД)"@ru , "Industries (ОПД)"@en .
+
+# Дизъюнктность сопроводительных ресурсов удалена вместе с верхней таксономией «корзин»
+# (см. definitions.ttl): она ничего не выводила, а только запрещала. Осмысленная дизъюнктность
+# оставлена в inferences.ttl — на ступенях каскада, где схлопывание типов было бы ошибкой.

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- OASIS XML catalog: maps the logical IRIs of the ontology modules to local files.
+     Protégé and the OWL API read it from the ontology folder, so owl:imports resolve offline.
+     Single entry point: krm_ontology.ttl. -->
+<catalog prefer="public" xmlns="urn:oasis:names:tc:entity:xmlns:xml:catalog">
+  <uri name="http://example.org/krm"            uri="krm-core.ttl"/>
+  <uri name="http://example.org/krm/actors"     uri="actors.ttl"/>
+  <uri name="http://example.org/krm/kim"        uri="kim.ttl"/>
+  <uri name="http://example.org/krm/planning"   uri="planning.ttl"/>
+  <uri name="http://example.org/krm/assessment" uri="assessment.ttl"/>
+  <uri name="http://example.org/krm/process"    uri="process.ttl"/>
+  <uri name="http://example.org/krm/inferences" uri="inferences.ttl"/>
+  <uri name="http://example.org/krm/definitions" uri="definitions.ttl"/>
+  <uri name="http://example.org/krm/extensions" uri="extensions.ttl"/>
+  <uri name="http://example.org/krm/campaign"   uri="campaign.ttl"/>
+  <uri name="http://example.org/krm/datasets"   uri="datasets.ttl"/>
+  <uri name="http://example.org/krm/ontology"   uri="krm_ontology.ttl"/>
+  <group id="Folder Repository, directory=, recursive=true, Auto-Update=true, version=2" prefer="public" xml:base=""/>
+</catalog>

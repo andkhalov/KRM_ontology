@@ -1,0 +1,48 @@
+{
+  "title": "KRM Ontology: An OWL 2 Ontology of the Competency-Role Model and Competency Assessment for AI Specialists",
+  "description": "An OWL 2 ontology of the competency-role model (KRM) for artificial intelligence specialists and of the competency-assessment cycle built on it. Eleven modules cover the KRM tree down to the competence-indicator-level unit (CIL); universities, educational programs and their testing profiles with declared tools and subjects of knowledge; assessment materials (general and specific descriptors, tasks of four types, task variants, test cases, reference solutions, rubrics); planning of test variants; attempts, scores and their recomposition; PROV-O-based provenance with validation and expert acceptance; the assessment campaign and its assembly policy; and datasets used as study objects. Defined classes derive the task form, the checking contour and the readiness of a task variant from stored facts; 39 SHACL node shapes express data constraints and readiness gates. The release contains 81 classes, 127 object properties, 87 datatype properties and 22 SKOS concept schemes with Russian and English labels, three example A-Boxes and validation scripts (rdflib, pyshacl, HermiT).",
+  "upload_type": "software",
+  "license": "MIT",
+  "version": "1.0.0",
+  "language": "eng",
+  "access_right": "open",
+  "keywords": [
+    "ontology",
+    "OWL 2",
+    "SHACL",
+    "SKOS",
+    "PROV-O",
+    "competency model",
+    "competency-role model",
+    "competency assessment",
+    "artificial intelligence education",
+    "assessment item generation",
+    "test assembly",
+    "knowledge graph",
+    "Russian",
+    "English"
+  ],
+  "creators": [
+    {
+      "name": "Khalov, Andrey P.",
+      "affiliation": "Moscow Institute of Physics and Technology (MIPT); Federal Research Center \"Computer Science and Control\" of the Russian Academy of Sciences",
+      "orcid": "0009-0005-4584-8245"
+    },
+    {
+      "name": "Kustov, Denis V.",
+      "affiliation": "Moscow Institute of Physics and Technology (MIPT)",
+      "orcid": "0000-0002-8389-6388"
+    },
+    {
+      "name": "Ataeva, Olga M.",
+      "affiliation": "Federal Research Center \"Computer Science and Control\" of the Russian Academy of Sciences",
+      "orcid": "0000-0003-0367-5575"
+    },
+    {
+      "name": "Tuchkova, Natalia P.",
+      "affiliation": "Federal Research Center \"Computer Science and Control\" of the Russian Academy of Sciences",
+      "orcid": "0000-0001-5357-9640"
+    }
+  ],
+  "notes": "Copyright (c) 2026 Andrey P. Khalov, Denis V. Kustov, Olga M. Ataeva, Natalia P. Tuchkova. Distributed under MIT (see license field)."
+}

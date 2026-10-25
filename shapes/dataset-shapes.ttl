@@ -1,0 +1,35 @@
+# dataset-shapes.ttl — SHACL-проверки датасетов (объектов исследования).
+# Не входит в owl:imports зонтика (валидация, не схема). Грузится при проверке/курировании.
+# Принцип пилота: датасеты небольшие (чтобы система не легла) — известный размер обязателен,
+# превышение порога — мягкое предупреждение (порог настраиваемый, здесь 100 000 записей).
+
+@prefix krm:  <http://example.org/krm#> .
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+# --- Датасет: известный размер и ссылка на артефакт обязательны (нарушение) ---
+krm:DatasetShape a sh:NodeShape ;
+    sh:targetClass krm:Dataset ;
+    sh:property [ sh:path krm:rowCount ; sh:minCount 1 ; sh:datatype xsd:integer ;
+                  sh:message "У датасета должен быть указан размер (число записей)."@ru ] ;
+    sh:property [ sh:path krm:accessRef ; sh:minCount 1 ;
+                  sh:message "У датасета должна быть ссылка на хранимый артефакт (в графе — только ссылка)."@ru ] ;
+    sh:property [ sh:path krm:datasetFormat ; sh:minCount 1 ;
+                  sh:message "У датасета должен быть указан формат."@ru ] .
+
+# --- Размер для пилота: мягкий потолок (предупреждение, не блокирует) ---
+krm:DatasetSizeShape a sh:NodeShape ;
+    sh:targetClass krm:Dataset ;
+    sh:property [ sh:path krm:rowCount ; sh:maxInclusive 100000 ; sh:severity sh:Warning ;
+                  sh:message "Крупный датасет (>100 000 записей): риск нагрузки на пилоте; рассмотрите выборку."@ru ] .
+
+# --- Ракурс: ровно один датасет; рекомендуется указать аналитический тип задачи ---
+krm:DatasetPerspectiveShape a sh:NodeShape ;
+    sh:targetClass krm:DatasetPerspective ;
+    sh:property [ sh:path krm:ofDataset ; sh:minCount 1 ; sh:maxCount 1 ; sh:class krm:Dataset ;
+                  sh:message "Ракурс должен относиться ровно к одному датасету."@ru ] .
+
+krm:DatasetPerspectiveKindShape a sh:NodeShape ;
+    sh:targetClass krm:DatasetPerspective ;
+    sh:property [ sh:path krm:analyticTaskKind ; sh:minCount 1 ; sh:severity sh:Warning ;
+                  sh:message "Укажите аналитический тип задачи ракурса (для контроля покрытия типов задач)."@ru ] .

@@ -1,0 +1,265 @@
+# actors.ttl — Модуль акторов и профилей тестирования ОП.
+# Вузы, образовательные программы, дисциплины (РПД), студенты, эксперты;
+# профиль тестирования ОП (внешний вход: КИУ + списки ИПД/ПЗ) и его назначение студентам.
+# ИПД/ПЗ как SKOS-справочники; декларация ИПД/ПЗ (значение+источник+комментарий) — реификация.
+# Аннотации ru/en; SKOS prefLabel@ru — основной.
+
+@prefix krm:  <http://example.org/krm#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix dct:  <http://purl.org/dc/terms/> .
+
+<http://example.org/krm/actors> a owl:Ontology ;
+    dct:title "Модуль акторов и профилей тестирования ОП"@ru , "Actors and program testing-profile module"@en ;
+    rdfs:label "Акторы и профили (actors)"@ru , "Actors and profiles (actors)"@en ;
+    owl:versionInfo "1.0.0" ;
+    owl:imports <http://example.org/krm> ;
+    dct:description "Вузы, образовательные программы и дисциплины (РПД), студенты и эксперты; профиль тестирования образовательной программы (набор КИУ + списки ИПД и ПЗ) и его назначение подмножеству студентов."@ru ,
+        "Universities, educational programs and disciplines, students and experts; the program testing profile (a set of CILs + lists of tools/ИПД and subjects/ПЗ) and its assignment to a subset of students."@en .
+
+############################ АКТОРЫ-ОРГАНИЗАЦИИ ############################
+
+krm:University a owl:Class ;
+    rdfs:label "Вуз (получатель гранта)"@ru , "University (grant recipient)"@en ;
+    rdfs:comment "Организация — получатель гранта, предоставляющая сведения и организующая участие обучающихся."@ru ,
+        "A grant-recipient organization that supplies data and organizes student participation."@en .
+
+krm:EducationalProgram a owl:Class ;
+    rdfs:label "Образовательная программа (ОП)"@ru , "Educational program"@en ;
+    rdfs:comment "Образовательная программа топ-уровня, реализуемая вузом."@ru ,
+        "A top-level educational program delivered by a university."@en .
+
+krm:Discipline a owl:Class ;
+    rdfs:label "Дисциплина (РПД)"@ru , "Discipline (course syllabus)"@en ;
+    rdfs:comment "Профильная дисциплина программы (рабочая программа дисциплины), по курсам обучения."@ru ,
+        "A profile discipline of a program (work syllabus), per year of study."@en .
+
+############################ АКТОРЫ-ЛЮДИ ############################
+
+krm:Student a owl:Class ;
+    rdfs:label "Обучающийся"@ru , "Student"@en ;
+    rdfs:comment "Обучающийся, проходящий оценку. В графе представлен обезличенным идентификатором (ПДн отделены)."@ru ,
+        "A student undergoing assessment. Represented by an anonymous identifier (personal data kept separate)."@en .
+
+krm:Expert a owl:Class ;
+    rdfs:label "Эксперт"@ru , "Expert"@en ;
+    rdfs:comment "Эксперт-разработчик/проверяющий: пишет дескрипторы и шаблоны заданий, проверяет открытые задания, подтверждает порождённые агентом артефакты."@ru ,
+        "An expert author/reviewer: writes descriptors and task templates, grades open tasks, and confirms agent-generated artefacts."@en .
+
+krm:ExpertProfile a owl:Class ;
+    rdfs:label "Профиль эксперта"@ru , "Expert profile"@en ;
+    rdfs:comment "Квалификация эксперта, собираемая при регистрации: направления, предметы (ПЗ), инструменты (ИПД), ключевые слова и самоописание. Описана теми же справочниками, что и постановка задания, — чтобы сопоставлять задачи очереди (дескрипторы/шаблоны) эксперту графово-векторным поиском. Графовые фасеты — точные совпадения по словарю; ключевые слова/самоописание — материал для векторной стороны (krm:embedding)."@ru ,
+        "An expert's qualification captured at registration: directions, subjects (ПЗ), tools (ИПД), keywords and a self-description. Described with the same vocabularies as task setup, so work items (descriptors/templates) can be matched to the expert via graph+vector search. Graph facets give exact vocabulary matches; keywords/self-description feed the vector side (krm:embedding)."@en .
+
+############################ ПРОФИЛЬ ТЕСТИРОВАНИЯ ОП ############################
+
+krm:ProgramTestingProfile a owl:Class ;
+    rdfs:label "Профиль тестирования ОП"@ru , "Program testing profile"@en ;
+    rdfs:comment "Внешний вход: выбранный вузом набор КИУ под образовательную программу со списками ИПД и ПЗ. Назначается подмножеству студентов."@ru ,
+        "External input: the set of CILs a university selects for a program, with tool (ИПД) and subject (ПЗ) lists. Assigned to a subset of students."@en .
+
+krm:ProfileEntry a owl:Class ;
+    rdfs:label "Позиция профиля (по КИУ)"@ru , "Profile entry (per CIL)"@en ;
+    rdfs:comment "Реификация: одна позиция профиля по конкретному КИУ — курс обучения и декларации ИПД/ПЗ для этого КИУ."@ru ,
+        "Reification: one profile entry for a specific CIL — the year of study and the tool/subject declarations for that CIL."@en .
+
+krm:ToolDeclaration a owl:Class ;
+    rdfs:label "Декларация ИПД"@ru , "Tool declaration"@en ;
+    rdfs:comment "Заявленный инструмент с сопровождением: значение (ИПД), ссылка на источник, комментарий. Реификация атрибутивной связи."@ru ,
+        "A declared tool with metadata: value (tool/ИПД), a source link, a comment. Reification of an attributed link."@en .
+
+krm:SubjectDeclaration a owl:Class ;
+    rdfs:label "Декларация ПЗ"@ru , "Subject declaration"@en ;
+    rdfs:comment "Заявленный предмет знания с сопровождением: значение (ПЗ), ссылка на источник, комментарий. Реификация атрибутивной связи."@ru ,
+        "A declared subject of knowledge with metadata: value (subject/ПЗ), a source link, a comment. Reification of an attributed link."@en .
+
+############################ СПРАВОЧНИКИ ИПД / ПЗ (SKOS) ############################
+
+krm:Tool a owl:Class ; rdfs:subClassOf skos:Concept ;
+    rdfs:label "ИПД (инструмент профессиональной деятельности)"@ru , "Tool (professional activity instrument)"@en ;
+    rdfs:comment "Технологический контекст: язык, библиотека, фреймворк, среда, методология. Может быть стеком. SKOS-справочник, переиспользуемый между профилями."@ru ,
+        "Technological context: language, library, framework, environment, methodology. May be a stack. A SKOS vocabulary reused across profiles."@en .
+
+krm:Subject a owl:Class ; rdfs:subClassOf skos:Concept ;
+    rdfs:label "ПЗ (предмет знания)"@ru , "Subject of knowledge"@en ;
+    rdfs:comment "Тематический/предметный контекст: предметная область, тип данных, класс задач. SKOS-справочник."@ru ,
+        "Thematic/subject context: a subject area, a data type, a task class. A SKOS vocabulary."@en .
+
+krm:tools a skos:ConceptScheme ; rdfs:label "Справочник ИПД"@ru , "Tools vocabulary"@en .
+krm:subjects a skos:ConceptScheme ; rdfs:label "Справочник ПЗ"@ru , "Subjects vocabulary"@en .
+
+############################ СВОЙСТВА ############################
+
+krm:atUniversity a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:range krm:University ;
+    rdfs:label "в вузе"@ru , "at university"@en ;
+    rdfs:comment "Принадлежность программы/студента вузу."@ru , "A program's/student's affiliation to a university."@en .
+
+krm:inProgram a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Discipline ; rdfs:range krm:EducationalProgram ;
+    rdfs:label "в программе"@ru , "in program"@en ;
+    rdfs:comment "Дисциплина в составе образовательной программы."@ru , "A discipline within an educational program."@en .
+
+krm:forProgram a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:ProgramTestingProfile ; rdfs:range krm:EducationalProgram ;
+    rdfs:label "для программы"@ru , "for program"@en ;
+    rdfs:comment "Профиль тестирования относится к образовательной программе."@ru , "The testing profile applies to an educational program."@en .
+
+krm:hasEntry a owl:ObjectProperty ;
+    rdfs:domain krm:ProgramTestingProfile ; rdfs:range krm:ProfileEntry ;
+    rdfs:label "содержит позицию"@ru , "has entry"@en ;
+    rdfs:comment "Профиль содержит позиции по КИУ."@ru , "A profile contains per-CIL entries."@en .
+
+krm:forKIU a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:ProfileEntry ; rdfs:range krm:KIU ;
+    rdfs:label "по КИУ"@ru , "for CIL"@en ;
+    rdfs:comment "Позиция профиля относится к конкретному КИУ."@ru , "A profile entry refers to a specific CIL."@en .
+
+krm:declaresTool a owl:ObjectProperty ;
+    rdfs:domain krm:ProfileEntry ; rdfs:range krm:ToolDeclaration ;
+    rdfs:label "декларирует ИПД"@ru , "declares tool"@en .
+
+krm:declaresSubject a owl:ObjectProperty ;
+    rdfs:domain krm:ProfileEntry ; rdfs:range krm:SubjectDeclaration ;
+    rdfs:label "декларирует ПЗ"@ru , "declares subject"@en .
+
+krm:tool a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:ToolDeclaration ; rdfs:range krm:Tool ;
+    rdfs:label "инструмент"@ru , "tool"@en .
+
+krm:subject a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:SubjectDeclaration ; rdfs:range krm:Subject ;
+    rdfs:label "предмет"@ru , "subject"@en .
+
+krm:sourceRef a owl:ObjectProperty ;
+    rdfs:range krm:Source ;
+    rdfs:label "ссылка на источник"@ru , "source reference"@en ;
+    rdfs:comment "Источник, сопровождающий декларацию ИПД/ПЗ (отдельно от krm:hasSource, привязанного к КИУ)."@ru ,
+        "The source accompanying a tool/subject declaration (distinct from krm:hasSource which is bound to a CIL)."@en .
+
+krm:studentProgram a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Student ; rdfs:range krm:EducationalProgram ;
+    rdfs:label "образовательная программа студента"@ru , "student's educational program"@en ;
+    rdfs:comment "Образовательная программа, на которой учится студент. АРНОСТЬ СТРОГО ОДИН (функциональное): студент учится ровно на одной ОП — так в жизни, и на этом стоит вся цепочка «студент → ОП → выбранные вузом КИУ → задания». Через ОП студент получает вуз (krm:atUniversity), уровень программы, направление подготовки и заявленные вузом ИПД/ПЗ. Согласованность с назначенным профилем (krm:hasTestingProfile ∘ krm:forProgram) проверяется SHACL."@ru ,
+        "The educational program the student is enrolled in. ARITY EXACTLY ONE (functional): a student is enrolled in exactly one program — as in real life, and the whole chain 'student → program → the CILs selected by the university → tasks' rests on it. Through the program the student inherits the university (krm:atUniversity), the program level, the field of study and the tools/subjects declared by the university. Consistency with the assigned testing profile (krm:hasTestingProfile ∘ krm:forProgram) is checked in SHACL."@en .
+
+krm:hasTestingProfile a owl:ObjectProperty ;
+    rdfs:domain krm:Student ; rdfs:range krm:ProgramTestingProfile ;
+    rdfs:label "назначенный профиль"@ru , "has testing profile"@en ;
+    rdfs:comment "Профиль тестирования, назначенный студенту (один профиль назначается подмножеству студентов). У студента профиль РОВНО ОДИН (SHACL), и его ОП обязана совпадать с krm:studentProgram — иначе студента проверяли бы по КИУ чужой программы."@ru ,
+        "The testing profile assigned to the student (one profile is assigned to a subset of students). A student has EXACTLY ONE profile (SHACL), and its program must coincide with krm:studentProgram — otherwise the student would be assessed on another program's CILs."@en .
+
+krm:hasProfile a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Expert ; rdfs:range krm:ExpertProfile ;
+    rdfs:label "профиль эксперта"@ru , "has profile"@en .
+
+krm:expertiseDirection a owl:ObjectProperty ;
+    rdfs:domain krm:ExpertProfile ; rdfs:range krm:Direction ;
+    rdfs:label "область экспертизы (направление)"@ru , "expertise direction"@en ;
+    rdfs:comment "Направление, по которому эксперт квалифицирован. Многие-ко-многим. Сопоставляется с направлением дескриптора/шаблона (через КИУ → компетенцию → направление)."@ru ,
+        "A direction the expert is qualified in. Many-to-many. Matched against a descriptor/template direction (via CIL → competence → direction)."@en .
+
+krm:expertiseSubject a owl:ObjectProperty ;
+    rdfs:domain krm:ExpertProfile ; rdfs:range krm:Subject ;
+    rdfs:label "предмет экспертизы (ПЗ)"@ru , "expertise subject"@en ;
+    rdfs:comment "Предмет знания (ПЗ), по которому эксперт квалифицирован. Тот же справочник, что и ПЗ профиля тестирования и фактический ПЗ варианта."@ru ,
+        "A subject of knowledge (ПЗ) the expert is qualified in. The same vocabulary as the testing-profile subjects and a variant's actual subject."@en .
+
+krm:expertiseTool a owl:ObjectProperty ;
+    rdfs:domain krm:ExpertProfile ; rdfs:range krm:Tool ;
+    rdfs:label "инструмент экспертизы (ИПД)"@ru , "expertise tool"@en ;
+    rdfs:comment "Инструмент/язык/библиотека (ИПД), которым эксперт владеет. Сопоставляется с языком/библиотекой шаблона (взаимодействие) и фактическим ИПД варианта."@ru ,
+        "A tool/language/library (ИПД) the expert commands. Matched against a template's language/library (interaction) and a variant's actual tool."@en .
+
+krm:profileKeyword a owl:DatatypeProperty ;
+    rdfs:domain krm:ExpertProfile ; rdfs:range rdfs:Literal ;
+    rdfs:label "ключевое слово профиля"@ru , "profile keyword"@en ;
+    rdfs:comment "Свободное ключевое слово, введённое экспертом при регистрации; множественное. Сопоставляется с темами КИУ (krm:Topic) и материалом векторного поиска."@ru ,
+        "A free keyword entered by the expert at registration; multi-valued. Matched against CIL topics (krm:Topic) and fed into vector search."@en .
+
+krm:selfDescription a owl:DatatypeProperty ;
+    rdfs:domain krm:ExpertProfile ; rdfs:range rdfs:Literal ;
+    rdfs:label "самоописание эксперта"@ru , "expert self-description"@en ;
+    rdfs:comment "Свободное описание опыта/специализации, заполняется при регистрации; основной текст для векторного представления (krm:embedding)."@ru ,
+        "A free-text description of experience/specialization, filled at registration; the main text for the vector representation (krm:embedding)."@en .
+
+krm:embedding a owl:AnnotationProperty ;
+    rdfs:label "векторное представление"@ru , "embedding"@en ;
+    rdfs:comment "Нелогический хук гибридного графово-векторного поиска: ссылка на запись векторного индекса (или сериализация вектора) для узла — профиля эксперта, дескриптора, шаблона задания. Annotation: ризонер его игнорирует; сам индекс и метрика близости — вне T-Box. Применимо к любому сопоставляемому узлу."@ru ,
+        "A non-logical hook for hybrid graph+vector search: a reference to a vector-index entry (or a serialized vector) for a node — an expert profile, a descriptor, a task template. An annotation: the reasoner ignores it; the index and similarity metric live outside the T-Box. Applicable to any matched node."@en .
+
+############################ ДАТА-СВОЙСТВА ############################
+
+krm:anonymousId a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Student ; rdfs:range xsd:string ;
+    rdfs:label "обезличенный идентификатор"@ru , "anonymous identifier"@en ;
+    rdfs:comment "Сквозной обезличенный идентификатор обучающегося; персональные данные хранятся отдельно."@ru ,
+        "An end-to-end anonymous student identifier; personal data is stored separately."@en .
+
+krm:courseYear a owl:DatatypeProperty ;
+    rdfs:range xsd:integer ;
+    rdfs:label "курс обучения"@ru , "year of study"@en ;
+    rdfs:comment "Курс обучения (1–4): у студента и/или у позиции профиля по КИУ."@ru ,
+        "Year of study (1–4): of a student and/or of a per-CIL profile entry."@en .
+
+krm:controlGroup a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Student ; rdfs:range xsd:boolean ;
+    rdfs:label "флаг контрольной группы"@ru , "control-group flag"@en ;
+    rdfs:comment "Истина, если обучающийся отнесён к контрольной группе."@ru ,
+        "True if the student belongs to the control group."@en .
+
+krm:note a owl:DatatypeProperty ;
+    rdfs:range rdfs:Literal ;
+    rdfs:label "комментарий"@ru , "note"@en ;
+    rdfs:comment "Свободный комментарий (например, к декларации ИПД/ПЗ)."@ru ,
+        "A free-text comment (e.g. on a tool/subject declaration)."@en .
+
+############################ УРОВЕНЬ ОП И НАПРАВЛЕНИЕ ПОДГОТОВКИ (НП/ГОСТ) ############################
+
+krm:programLevel a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:EducationalProgram ; rdfs:range skos:Concept ;
+    rdfs:label "уровень программы"@ru , "program level"@en ;
+    rdfs:comment "Уровень образовательной программы: ДС / ТОП ДС / ТОП ДС со звездой (SKOS krm:programLevels)."@ru ,
+        "The educational program level: DS / TOP DS / TOP DS-star (SKOS krm:programLevels)."@en .
+
+krm:programLevels a skos:ConceptScheme ; rdfs:label "Уровни образовательных программ"@ru , "Educational program levels"@en .
+krm:PL_DS a skos:Concept ; skos:inScheme krm:programLevels ; skos:notation "ДС" ;
+    skos:prefLabel "ДС"@ru , "DS"@en ; skos:definition "Дополнительная специализация."@ru .
+krm:PL_TopDS a skos:Concept ; skos:inScheme krm:programLevels ; skos:notation "ТОП ДС" ;
+    skos:prefLabel "ТОП ДС"@ru , "TOP DS"@en .
+krm:PL_TopDSStar a skos:Concept ; skos:inScheme krm:programLevels ; skos:notation "ТОП ДС*" ;
+    skos:prefLabel "ТОП ДС со звездой"@ru , "TOP DS with a star"@en .
+
+krm:FieldOfStudy a owl:Class ;
+    rdfs:label "Направление подготовки (НП)"@ru , "Field of study"@en ;
+    rdfs:comment "Направление подготовки по федеральному классификатору (ОКСО/ФГОС ВО): код (например, 09.03.01) и наименование («Информатика и вычислительная техника»). Обеспечивает соответствие образовательной программы государственному стандарту."@ru ,
+        "A field of study per the federal classifier (OKSO/FGOS VO): a code (e.g. 09.03.01) and a name. Aligns an educational program with the state standard (GOST)."@en .
+
+krm:fieldOfStudy a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:EducationalProgram ; rdfs:range krm:FieldOfStudy ;
+    rdfs:label "направление подготовки"@ru , "field of study"@en ;
+    rdfs:comment "Связывает ОП с направлением подготовки (ГОСТ/ОКСО)."@ru , "Links a program to its field of study (GOST/OKSO)."@en .
+
+krm:programDescription a owl:DatatypeProperty ;
+    rdfs:domain krm:EducationalProgram ; rdfs:range rdfs:Literal ;
+    rdfs:label "описание программы"@ru , "program description"@en ;
+    rdfs:comment "Свободное описание ОП; дополнительный контекст для формирования предметной области постановки (наряду со структурными programLevel/fieldOfStudy и декларациями ИПД/ПЗ)."@ru ,
+        "A free-text description of the program; extra context for shaping the task statement's subject area (alongside structural programLevel/fieldOfStudy and tool/subject declarations)."@en .
+
+krm:npCode a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:FieldOfStudy ; rdfs:range xsd:string ;
+    rdfs:label "код НП (ОКСО)"@ru , "field code (OKSO)"@en ;
+    rdfs:comment "Код направления подготовки по ОКСО/ФГОС (например, 09.03.01)."@ru ,
+        "The OKSO/FGOS field-of-study code (e.g. 09.03.01)."@en .
+
+############################ КЛЮЧИ ############################
+
+krm:University owl:hasKey ( krm:code ) .
+krm:FieldOfStudy owl:hasKey ( krm:npCode ) .
+krm:EducationalProgram owl:hasKey ( krm:code ) .
+krm:Student owl:hasKey ( krm:anonymousId ) .
+krm:Expert owl:hasKey ( krm:code ) .
+krm:ProgramTestingProfile owl:hasKey ( krm:code ) .

@@ -1,0 +1,148 @@
+# assessment.ttl — Модуль ассесмента и оценивания.
+# Прохождение, ответы и баллы, рекомпозиция (узлы-баллы + веса), пороги и статусы,
+# индивидуальный профиль, федеральный показатель, апелляции.
+# Аннотации ru/en.
+
+@prefix krm:  <http://example.org/krm#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix dct:  <http://purl.org/dc/terms/> .
+
+<http://example.org/krm/assessment> a owl:Ontology ;
+    dct:title "Модуль ассесмента и оценивания"@ru , "Assessment and scoring module"@en ;
+    rdfs:label "Ассесмент (assessment)"@ru , "Assessment (assessment)"@en ;
+    owl:versionInfo "1.0.0" ;
+    owl:imports <http://example.org/krm/planning> ;
+    dct:description "Прохождение варианта теста, ответы и баллы, обратная рекомпозиция по каскаду с весами, пороги и статусы достижения, индивидуальный профиль, федеральный показатель и апелляции."@ru ,
+        "Sitting a test variant, answers and scores, bottom-up recomposition with weights, achievement thresholds and statuses, the individual profile, the federal indicator and appeals."@en .
+
+############################ ПРОХОЖДЕНИЕ И ОТВЕТЫ ############################
+
+krm:Attempt a owl:Class ;
+    rdfs:label "Прохождение"@ru , "Attempt"@en ;
+    rdfs:comment "Факт прохождения варианта теста обучающимся: статус, журнал, воспроизводимость по seed."@ru ,
+        "A student's sitting of a test variant: status, log, reproducibility by seed."@en .
+
+krm:ofTestVariant a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Attempt ; rdfs:range krm:TestVariant ;
+    rdfs:label "по варианту теста"@ru , "of test variant"@en .
+
+krm:Answer a owl:Class ;
+    rdfs:label "Ответ"@ru , "Answer"@en ;
+    rdfs:comment "Ответ обучающегося на вариант задания: сырой и нормализованный (0–100) балл, контур проверки, проверяющий."@ru ,
+        "A student's answer to a task variant: raw and normalized (0–100) score, the check contour, the checker."@en .
+
+krm:toVariant a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Answer ; rdfs:range krm:TaskVariant ;
+    rdfs:label "на вариант задания"@ru , "to task variant"@en .
+
+krm:inAttempt a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Answer ; rdfs:range krm:Attempt ;
+    rdfs:label "в прохождении"@ru , "in attempt"@en .
+
+krm:rawScore a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Answer ; rdfs:range xsd:decimal ;
+    rdfs:label "сырой балл"@ru , "raw score"@en .
+
+krm:normalizedScore a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Answer ; rdfs:range xsd:decimal ;
+    rdfs:label "нормализованный балл (0–100)"@ru , "normalized score (0–100)"@en .
+
+krm:checkedByContour a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Answer ; rdfs:range skos:Concept ;
+    rdfs:label "контур проверки ответа"@ru , "check contour"@en ;
+    rdfs:comment "Автоматизированная / экспертная (krm:checkContours из модуля КИМ)."@ru , "Automated / expert (krm:checkContours from the KIM module)."@en .
+
+krm:checkedByExpert a owl:ObjectProperty ;
+    rdfs:domain krm:Answer ; rdfs:range krm:Expert ;
+    rdfs:label "проверено экспертом"@ru , "checked by expert"@en .
+
+############################ РЕКОМПОЗИЦИЯ: УЗЛЫ-БАЛЛЫ И ВЕСА ############################
+
+krm:Score a owl:Class ;
+    rdfs:label "Балл узла (рекомпозиция)"@ru , "Node score (recomposition)"@en ;
+    rdfs:comment "Вычисленный балл (0–100) для узла каскада у конкретного обучающегося. Обязательно несёт: krm:scoreOf (узел — дескриптор/КИУ/индикатор/компетенция/роль/ВТ), krm:forStudent (чей балл), krm:scoreValue (значение); на индикаторе/компетенции — krm:achievementStatus (статус)."@ru ,
+        "A computed score (0–100) for a cascade node for a specific student. Always carries: krm:scoreOf (the node — descriptor/CIL/indicator/competence/role/test-variant), krm:forStudent (whose score), krm:scoreValue (value); on indicator/competence — krm:achievementStatus (status)."@en .
+
+krm:scoreOf a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Score ;
+    rdfs:label "балл узла"@ru , "score of"@en ;
+    rdfs:comment "Узел каскада, к которому относится балл (дескриптор, КИУ, индикатор, компетенция, роль, ВТ)."@ru ,
+        "The cascade node the score refers to (descriptor, CIL, indicator, competence, role, test variant)."@en .
+
+krm:scoreValue a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Score ; rdfs:range xsd:decimal ;
+    rdfs:label "значение балла (0–100)"@ru , "score value (0–100)"@en .
+
+krm:achievementStatus a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Score ; rdfs:range skos:Concept ;
+    rdfs:label "статус достижения"@ru , "achievement status"@en ;
+    rdfs:comment "Достигнут / частично / не достигнут (SKOS krm:achievementStatuses); применяется к индикатору и компетенции."@ru ,
+        "Achieved / partial / not achieved (SKOS krm:achievementStatuses); applied to indicator and competence."@en .
+
+krm:levelWeight a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:MasteryLevel ; rdfs:range xsd:decimal ;
+    rdfs:label "вес уровня"@ru , "level weight"@en ;
+    rdfs:comment "Вес уровня Б/С/П при склейке уровней в индикатор."@ru , "Weight of a level (B/S/P) when aggregating levels into an indicator."@en .
+
+krm:prevalenceWeight a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Indicator ; rdfs:range xsd:decimal ;
+    rdfs:label "вес распространённости"@ru , "prevalence weight"@en ;
+    rdfs:comment "Вес индикатора (по частоте встречаемости) при склейке индикаторов в компетенцию."@ru ,
+        "Weight of an indicator (by prevalence) when aggregating indicators into a competence."@en .
+
+krm:taskTypeWeight a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:TaskType ; rdfs:range xsd:decimal ;
+    rdfs:label "вес типа задания"@ru , "task type weight"@en .
+
+############################ ПОРОГИ И СТАТУСЫ ############################
+
+krm:Threshold a owl:Class ;
+    rdfs:label "Порог достижения"@ru , "Achievement threshold"@en ;
+    rdfs:comment "Порог для статуса узла (индикатор/компетенция по курсам): применяются два условия — балл узла и доля выполненных заданий."@ru ,
+        "A threshold for a node status (indicator/competence per year): two conditions apply — the node score and the share of completed tasks."@en .
+
+krm:minScore a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Threshold ; rdfs:range xsd:decimal ;
+    rdfs:label "порог по баллу"@ru , "minimum score"@en .
+
+krm:minCompletion a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Threshold ; rdfs:range xsd:decimal ;
+    rdfs:label "порог по доле выполненных"@ru , "minimum completion share"@en .
+
+############################ ИТОГОВЫЕ ФОРМЫ ############################
+
+krm:IndividualProfile a owl:Class ;
+    rdfs:label "Индивидуальный профиль обучающегося"@ru , "Individual student profile"@en ;
+    rdfs:comment "Сводка баллов и статусов обучающегося по индикаторам/компетенциям/ролям; вершина — итог варианта теста."@ru ,
+        "A summary of a student's scores and statuses by indicators/competences/roles; the top node is the test-variant total."@en .
+
+krm:FederalIndicator a owl:Class ;
+    rdfs:label "Федеральный показатель"@ru , "Federal indicator"@en ;
+    rdfs:comment "Доля обучающихся, достигших порога (над множеством вариантов теста). Только для отчётности, не для ранжирования вузов."@ru ,
+        "The share of students who reached the threshold (over the set of test variants). For reporting only, not for ranking universities."@en .
+
+############################ АПЕЛЛЯЦИИ ############################
+
+krm:Appeal a owl:Class ;
+    rdfs:label "Апелляция"@ru , "Appeal"@en ;
+    rdfs:comment "Апелляция по прохождению: вариант теста воспроизводится по seed, проводится повторная проверка и при необходимости арбитраж."@ru ,
+        "An appeal on an attempt: the test variant is reproduced by seed, re-checked, and arbitrated if needed."@en .
+
+krm:appealOf a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Appeal ; rdfs:range krm:Attempt ;
+    rdfs:label "по прохождению"@ru , "appeal of"@en .
+
+############################ СПРАВОЧНИКИ (SKOS) ############################
+
+krm:achievementStatuses a skos:ConceptScheme ; rdfs:label "Статусы достижения"@ru , "Achievement statuses"@en .
+krm:AS_Achieved a skos:Concept ; skos:inScheme krm:achievementStatuses ; skos:prefLabel "достигнут"@ru , "achieved"@en .
+krm:AS_Partial  a skos:Concept ; skos:inScheme krm:achievementStatuses ; skos:prefLabel "частично достигнут"@ru , "partially achieved"@en .
+krm:AS_Not      a skos:Concept ; skos:inScheme krm:achievementStatuses ; skos:prefLabel "не достигнут"@ru , "not achieved"@en .
+
+############################ КЛЮЧИ ############################
+
+krm:Attempt owl:hasKey ( krm:code ) .

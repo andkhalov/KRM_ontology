@@ -1,0 +1,4 @@
+# load_all.py (parsing and SHACL validation); tested with rdflib 7.6 and pyshacl 0.40
+rdflib>=7.0
+pyshacl>=0.30
+# check_hermit.py additionally needs Java and: pip install owlready2  (tested with 0.51)

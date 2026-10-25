@@ -1,0 +1,99 @@
+# actors-kim-example.ttl — сквозной мини-A-Box для проверки модулей actors/kim/planning.
+# Использует КИУ из krm-core-example.ttl (kid:KIU_MF-1_MF-1.1_B).
+# Цепочка: вуз/ОП(уровень,НП) → профиль → студент → дескриптор → шаблон(тип) → вариант → ВТ.
+
+@prefix krm:  <http://example.org/krm#> .
+@prefix kid:  <http://example.org/krm/id/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+# --- вуз, направление подготовки (НП/ГОСТ), программа, уровень ОП ---
+kid:Univ_Example a krm:University ; krm:code "EXU" ; rdfs:label "Пример-университет"@ru , "Example University"@en .
+kid:NP_090301 a krm:FieldOfStudy ; krm:npCode "09.03.01" ;
+    rdfs:label "Информатика и вычислительная техника"@ru .
+kid:OP_1 a krm:EducationalProgram ; krm:code "OP-EXU-1" ;
+    krm:atUniversity kid:Univ_Example ; krm:programLevel krm:PL_DS ; krm:fieldOfStudy kid:NP_090301 ;
+    krm:programDescription "Подготовка инженеров промышленных систем ИИ: ML-конвейеры, обработка данных, эксплуатация моделей."@ru ;
+    rdfs:label "Прикладной искусственный интеллект"@ru , "Applied artificial intelligence"@en .
+
+# --- справочные ИПД/ПЗ ---
+kid:Tool_PyNumPy a krm:Tool ; skos:inScheme krm:tools ; skos:prefLabel "Python + NumPy"@ru , "Python + NumPy"@en .
+kid:Subj_Regression a krm:Subject ; skos:inScheme krm:subjects ; skos:prefLabel "Регрессия"@ru , "Regression"@en .
+kid:Src_RPD1 a krm:Source ; rdfs:label "РПД дисциплины «Машинное обучение»"@ru .
+
+# --- профиль тестирования ОП + позиция по КИУ + декларации ИПД/ПЗ ---
+kid:Profile_1 a krm:ProgramTestingProfile ; krm:code "PROF-1" ;
+    krm:forProgram kid:OP_1 ; krm:hasEntry kid:PE_1 .
+kid:PE_1 a krm:ProfileEntry ; krm:forKIU kid:KIU_MF-1_MF-1.1_B ; krm:courseYear 1 ;
+    krm:declaresTool kid:TD_1 , kid:TD_2 ; krm:declaresSubject kid:SD_1 .
+# ЯЗЫК — частный вид ИПД, поэтому вуз обязан заявить и его: задание типа «код» может требовать
+# только тот язык, который вуз декларировал по этому КИУ (проверяется shapes/program-shapes.ttl).
+kid:TD_1 a krm:ToolDeclaration ; krm:tool krm:Lang_Python ; krm:sourceRef kid:Src_RPD1 ;
+    krm:note "Язык, заявленный вузом по дисциплине (один из пяти)."@ru .
+kid:TD_2 a krm:ToolDeclaration ; krm:tool kid:Tool_PyNumPy ; krm:sourceRef kid:Src_RPD1 ;
+    krm:note "Библиотека/стек, заявленный вузом по дисциплине."@ru .
+kid:SD_1 a krm:SubjectDeclaration ; krm:subject kid:Subj_Regression ;
+    krm:note "Базовый предметный контекст."@ru .
+
+# --- студент с назначенным профилем ---
+kid:Stud_1 a krm:Student ; krm:anonymousId "S-0001" ; krm:atUniversity kid:Univ_Example ;
+    krm:studentProgram kid:OP_1 ;   # арность строго 1: студент учится на ОДНОЙ ОП
+    krm:courseYear 1 ; krm:controlGroup false ; krm:hasTestingProfile kid:Profile_1 .
+
+# --- эксперт + профиль (собран при регистрации: направления/предметы/инструменты/ключевые слова) ---
+kid:Exp_1 a krm:Expert ; krm:code "E-001" ; rdfs:label "Эксперт 1"@ru ; krm:hasProfile kid:EP_1 .
+kid:EP_1 a krm:ExpertProfile ; krm:expertiseDirection kid:Dir_ProbStat ;
+    krm:expertiseSubject kid:Subj_Regression ; krm:expertiseTool kid:Tool_PyNumPy ;
+    krm:profileKeyword "регрессия"@ru , "обучение с учителем"@ru ;
+    krm:selfDescription "Кандидат наук, 7 лет преподаёт машинное обучение; специализация — регрессионные модели на Python."@ru ;
+    krm:embedding "vec://expert/E-001" .
+
+# --- КАСКАД ДЕСКРИПТОРОВ: КИУ → обобщённый (1:1) → частный (1–3) ---
+# Обобщённый дескриптор — граница «данное КРМ / сделанное нами»: у него есть автор и приёмка.
+kid:GDesc_1 a krm:GeneralDescriptor ; krm:code "MF-1_MF-1.1_Б_G" ;
+    krm:fromKIU kid:KIU_MF-1_MF-1.1_B ; krm:authoredBy kid:Exp_1 ;
+    krm:formulation "Владеет представлением об основных методах ИИ и их применимости."@ru ;
+    rdfs:label "Обобщённый дескриптор MF-1_MF-1.1_Б"@ru .
+
+kid:Desc_1 a krm:Descriptor ; krm:code "MF-1_MF-1.1_Б_D01" ; krm:specializes kid:GDesc_1 ;
+    krm:isNeutral true ; krm:maxScore 10.0 ; krm:weight 1.0 ; krm:resultType krm:RT_Know ;
+    krm:authoredBy kid:Exp_1 ;
+    krm:formulation "Перечисляет и определяет основные методы ИИ."@ru ;
+    rdfs:label "Перечисляет и определяет основные методы ИИ"@ru .
+# КИУ дескриптора — одним ребром krm:derivedFrom (specializes ⊑ derivedFrom, транзитивно).
+
+# --- ЗАДАНИЕ: ровно один тип из четырёх (здесь — код) ---
+# Сложность и время — две НЕЗАВИСИМЫЕ оценки эксперта. Содержимое (текст, стаб кода) — вне графа.
+kid:Tmpl_1 a krm:TaskTemplate ; krm:code "MF-1_MF-1.1_Б_D01_Z01" ; krm:forDescriptor kid:Desc_1 ;
+    krm:authoredBy kid:Exp_1 ; rdfs:label "Задание 1 (код)"@ru ;
+    krm:taskType krm:TT_Code ;
+    krm:language krm:Lang_Python ; krm:library kid:Tool_PyNumPy ;
+    krm:difficulty 3 ; krm:estimatedMinutes 8 ; krm:practiceOriented true ; krm:maxScore 10.0 ;
+    krm:hasTestCase kid:Test_1 ; krm:hasReferenceSolution kid:Ref_1 ;
+    krm:contentRef "content://task/MF-1_MF-1.1_Б_D01_Z01" .
+# Ризонер выводит: Tmpl_1 — ExecutableTask, OpenTask, AutoCheckedTask, PracticeOrientedTask;
+# krm:derivedFrom → Desc_1, GDesc_1, KIU_MF-1_MF-1.1_B ; krm:taskLevel → krm:Level_B.
+
+kid:Test_1 a krm:TestCase ; krm:isEdgeCase true ; krm:timeLimitMs 2000 ; krm:memoryLimitMb 256 ;
+    krm:contentRef "content://test/MF-1_MF-1.1_Б_D01_Z01/1" .
+kid:Ref_1 a krm:ReferenceSolution ; rdfs:label "Эталонное решение (Python)"@ru ;
+    krm:contentRef "content://refsol/MF-1_MF-1.1_Б_D01_Z01" .
+
+# --- ВАРИАНТ ЗАДАНИЯ: тип/сложность/время наследует у задания, своё — seed и содержимое ---
+kid:Var_1 a krm:TaskVariant ; krm:code "MF-1_MF-1.1_Б_D01_Z01_V001" ; krm:ofTemplate kid:Tmpl_1 ;
+    krm:seed "S-0001#1" ; krm:generationMode krm:GM_Agent ;
+    krm:actualTool kid:Tool_PyNumPy ; krm:actualSubject kid:Subj_Regression ;
+    krm:contentRef "content://variant/MF-1_MF-1.1_Б_D01_Z01_V001" .
+
+kid:Acc_1 a krm:ExpertAcceptance ; krm:acceptanceOf kid:Var_1 ; krm:acceptedBy kid:Exp_1 ;
+    krm:acceptedAt "2026-08-01T10:00:00"^^xsd:dateTime .
+# Валидация (passed=true) — в scenario-example; вместе с приёмкой ризонер классифицирует
+# Var_1 как krm:ReadyVariant (прежний хранимый флаг krm:readyForSitting удалён как дубль).
+
+# --- ВАРИАНТ ТЕСТА студента: агрегаты = суммы по включённым заданиям ---
+# (мини-пример: одно задание, поэтому диапазоны политики сборки заведомо не выполняются —
+#  шейпы бюджета дадут Warning, это ожидаемо для readiness-гейта на неполном каркасе)
+kid:TV_1 a krm:TestVariant ; krm:code "TV-S-0001" ; krm:forStudent kid:Stud_1 ;
+    krm:includesVariant kid:Var_1 ;
+    krm:taskCount 1 ; krm:durationMin 8 ; krm:difficultySum 3 ; krm:scoreSum 10.0 .

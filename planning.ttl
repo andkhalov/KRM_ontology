@@ -1,0 +1,202 @@
+# planning.ttl — Модуль планирования и спроса.
+# Матрица «студент × КИУ» (через профили), расчёт потребности, состав варианта теста (ВТ),
+# очереди генерации (дескрипторов и шаблонов/вариантов).
+# Аннотации ru/en.
+
+@prefix krm:  <http://example.org/krm#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix dct:  <http://purl.org/dc/terms/> .
+
+<http://example.org/krm/planning> a owl:Ontology ;
+    dct:title "Модуль планирования и спроса"@ru , "Planning and demand module"@en ;
+    rdfs:label "Планирование (planning)"@ru , "Planning (planning)"@en ;
+    owl:versionInfo "1.0.0" ;
+    owl:imports <http://example.org/krm/kim> ;
+    dct:description "Расчёт потребности в заданиях по матрице «студент × КИУ», состав варианта теста (ВТ) с квотами и очереди генерации дескрипторов и заданий."@ru ,
+        "Computing task demand from the student × CIL matrix, composing the test variant (ВТ) with quotas, and the descriptor/task generation queues."@en .
+
+############################ ВАРИАНТ ТЕСТА (ВТ) ############################
+
+krm:TestVariant a owl:Class ;
+    rdfs:label "Вариант теста (ВТ)"@ru , "Test variant"@en ;
+    rdfs:comment "ТО, ЧТО ПРОХОДИТ ОДИН ОБУЧАЮЩИЙСЯ: фиксированный набор вариантов заданий на одно прохождение, собранный заранее по seed. Два обязательства: (1) ПОКРЫТИЕ — набор покрывает КИУ, назначенные студенту профилем его ОП (krm:testVariantKIU ⊇ krm:studentKIU), а каждое задание специфицировано ИПД/ПЗ, заявленными вузом; (2) БЮДЖЕТ И КВОТЫ — суммы атрибутов заданий (время, сложность, баллы) попадают в диапазоны, а доли по типам, контуру проверки, практико-ориентированности и уровням выдержаны. Диапазоны и доли НЕ зашиты в схему: они заданы политикой сборки ассессмента (krm:AssemblyPolicy, модуль campaign) и проверяются по ней. Область персональной рекомпозиции; вершина — итог ВТ (0–100)."@ru ,
+        "WHAT ONE STUDENT SITS: a fixed set of task variants for one sitting, assembled in advance by seed. Two obligations: (1) COVERAGE — the set covers the CILs assigned to the student by their program profile (krm:testVariantKIU ⊇ krm:studentKIU), and every task is specified by the tools/subjects declared by the university; (2) BUDGET AND QUOTAS — the sums of task attributes (time, difficulty, scores) fall within ranges, and the shares by type, check contour, practice orientation and levels are met. The ranges and shares are NOT hard-wired into the schema: they are set by the assessment's assembly policy (krm:AssemblyPolicy, campaign module) and checked against it. The scope of personal recomposition; its top node is the test-variant total (0–100)."@en .
+
+krm:forStudent a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:range krm:Student ;
+    rdfs:label "для обучающегося"@ru , "for student"@en ;
+    rdfs:comment "Привязка к обучающемуся (полиморфно, без домена): используется на варианте теста (ВТ), индивидуальном профиле и узле-балле (Score) — все они персональны. Функциональное: ровно один обучающийся."@ru ,
+        "Link to a student (polymorphic, no domain): used on a test variant (ВТ), an individual profile and a score node (Score) — all are per-student. Functional: exactly one student."@en .
+
+krm:includesVariant a owl:ObjectProperty ;
+    rdfs:domain krm:TestVariant ; rdfs:range krm:TaskVariant ;
+    rdfs:label "включает вариант задания"@ru , "includes task variant"@en ;
+    rdfs:comment "Состав ВТ: уникальные варианты заданий (без повторов у одного студента)."@ru ,
+        "The composition of a test variant: unique task variants (no repeats for one student)."@en .
+
+# krm:coversKIU удалён как дубль: покрытие ВТ выводится цепочкой krm:testVariantKIU
+# (includesVariant ∘ ofTemplate ∘ forDescriptor ∘ specializes ∘ fromKIU) — один источник истины.
+
+# --- Денормализованные агрегаты ВТ (производные; сверяются с политикой сборки) ---
+# Это НЕ первичные значения: они равны агрегатам по включённым вариантам заданий. Хранятся для
+# дешёвых запросов панели администратора; согласованность с суммой по заданиям и попадание в
+# диапазоны krm:AssemblyPolicy проверяются SPARQL-гейтом сборки.
+
+krm:taskCount a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:TestVariant ; rdfs:range xsd:integer ;
+    rdfs:label "число заданий"@ru , "task count"@en ;
+    rdfs:comment "Число заданий в ВТ = |krm:includesVariant|. Производное; диапазон задаёт krm:AssemblyPolicy (krm:minTaskCount/krm:maxTaskCount)."@ru ,
+        "The number of tasks in a test variant = |krm:includesVariant|. Derived; the range is set by krm:AssemblyPolicy (krm:minTaskCount/krm:maxTaskCount)."@en .
+
+krm:durationMin a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:TestVariant ; rdfs:range xsd:integer ;
+    rdfs:label "длительность, мин"@ru , "duration, min"@en ;
+    rdfs:comment "Длительность ВТ = сумма krm:estimatedMinutes по включённым заданиям. Производное; диапазон — в krm:AssemblyPolicy."@ru ,
+        "The duration of a test variant = the sum of krm:estimatedMinutes over the included tasks. Derived; the range is set in krm:AssemblyPolicy."@en .
+
+krm:difficultySum a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:TestVariant ; rdfs:range xsd:integer ;
+    rdfs:label "суммарная сложность"@ru , "total difficulty"@en ;
+    rdfs:comment "Суммарная сложность ВТ = сумма krm:difficulty по включённым заданиям. Производное; диапазон — в krm:AssemblyPolicy. Ортогонально длительности и уровням освоения."@ru ,
+        "The total difficulty of a test variant = the sum of krm:difficulty over the included tasks. Derived; the range is set in krm:AssemblyPolicy. Orthogonal to duration and to mastery levels."@en .
+
+krm:scoreSum a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:TestVariant ; rdfs:range xsd:decimal ;
+    rdfs:label "суммарный балл (разбаловка)"@ru , "total raw score"@en ;
+    rdfs:comment "Суммарный сырой балл ВТ = сумма krm:maxScore по включённым заданиям. Производное; диапазон — в krm:AssemblyPolicy. Нормализуется в 0–100 при оценивании."@ru ,
+        "The total raw score of a test variant = the sum of krm:maxScore over the included tasks. Derived; the range is set in krm:AssemblyPolicy. Normalized to 0–100 during scoring."@en .
+
+############################ ПОТРЕБНОСТЬ (СПРОС) ############################
+
+krm:KIUDemand a owl:Class ;
+    rdfs:label "Потребность по КИУ"@ru , "CIL demand"@en ;
+    rdfs:comment "Рассчитанная потребность: для КИУ — число охваченных студентов и требуемое число вариантов заданий (с учётом квот и уникальности наборов)."@ru ,
+        "Computed demand: for a CIL — the number of covered students and the required number of task variants (given quotas and set uniqueness)."@en .
+
+krm:demandForKIU a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:KIUDemand ; rdfs:range krm:KIU ;
+    rdfs:label "потребность по КИУ"@ru , "demand for CIL"@en .
+
+krm:studentCount a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:KIUDemand ; rdfs:range xsd:integer ;
+    rdfs:label "число студентов"@ru , "student count"@en ;
+    rdfs:comment "Сколько студентов покрывает данный КИУ (столбец матрицы «студент × КИУ»)."@ru ,
+        "How many students this CIL covers (a column of the student × CIL matrix)."@en .
+
+krm:requiredVariants a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:KIUDemand ; rdfs:range xsd:integer ;
+    rdfs:label "требуется вариантов"@ru , "required variants"@en ;
+    rdfs:comment "Требуемое число вариантов заданий по КИУ; не менее двух на дескриптор, с учётом шкалы и числа языков."@ru ,
+        "Required number of task variants for the CIL; at least two per descriptor, given the priority scale and number of languages."@en .
+
+############################ ОЧЕРЕДИ ГЕНЕРАЦИИ ############################
+
+krm:WorkItem a owl:Class ;
+    rdfs:label "Элемент очереди генерации"@ru , "Generation work item"@en ;
+    rdfs:comment "Задача на создание дескриптора, шаблона задания или варианта; назначается эксперту (по квалификации) и/или агенту; имеет статус по шагам и приоритет."@ru ,
+        "A work item to create a descriptor, task template or variant; assigned to an expert (by qualification) and/or an agent; has a per-step status and a priority."@en .
+
+krm:workKind a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:WorkItem ; rdfs:range skos:Concept ;
+    rdfs:label "вид работы"@ru , "work kind"@en ;
+    rdfs:comment "Дескриптор / шаблон / вариант (SKOS krm:workKinds)."@ru , "Descriptor / template / variant (SKOS krm:workKinds)."@en .
+
+krm:targetKIU a owl:ObjectProperty ;
+    rdfs:domain krm:WorkItem ; rdfs:range krm:KIU ;
+    rdfs:label "целевой КИУ"@ru , "target CIL"@en ;
+    rdfs:comment "КИУ, для которого создаётся дескриптор (в т. ч. когда дескриптор отсутствует — очередь дескрипторов)."@ru ,
+        "The CIL a descriptor is created for (including when a descriptor is missing — the descriptor queue)."@en .
+
+krm:targetGeneralDescriptor a owl:ObjectProperty ;
+    rdfs:domain krm:WorkItem ; rdfs:range krm:GeneralDescriptor ;
+    rdfs:label "целевой обобщённый дескриптор"@ru , "target general descriptor"@en ;
+    rdfs:comment "Обобщённый дескриптор, для которого пишутся частные (очередь частных дескрипторов)."@ru ,
+        "The general descriptor whose specific descriptors are to be written (the specific-descriptor queue)."@en .
+
+krm:targetDescriptor a owl:ObjectProperty ;
+    rdfs:domain krm:WorkItem ; rdfs:range krm:Descriptor ;
+    rdfs:label "целевой частный дескриптор"@ru , "target specific descriptor"@en ;
+    rdfs:comment "Частный дескриптор, для которого пишется задание (очередь заданий)."@ru ,
+        "The specific descriptor a task is written for (the task queue)."@en .
+
+# --- СМЕТА: элемент очереди указывает на КАРКАС, для которого нужно написать содержимое ---
+# Ключевая связь для подхода «сначала смета, потом контент»: планировщик заранее создаёт задание
+# со ВСЕМИ метаданными (тип, сложность, время, дескриптор, язык, балл), но БЕЗ krm:contentRef, и
+# вешает на него элемент очереди. Тогда метаданные каркаса — это и есть ТЗ на написание: эксперту
+# (или агенту) остаётся произвести содержимое и проставить ссылку.
+
+krm:targetTask a owl:ObjectProperty ;
+    rdfs:domain krm:WorkItem ; rdfs:range krm:TaskTemplate ;
+    rdfs:label "целевое задание (каркас)"@ru , "target task (spec)"@en ;
+    rdfs:comment "Задание-каркас, для которого нужно произвести содержимое. Его метаданные — задание на работу: что именно писать (тип, сложность, время, дескриптор, язык, балл)."@ru ,
+        "The task spec whose content is to be produced. Its metadata IS the work order: what exactly to write (type, difficulty, time, descriptor, language, score)."@en .
+
+krm:targetVariant a owl:ObjectProperty ;
+    rdfs:domain krm:WorkItem ; rdfs:range krm:TaskVariant ;
+    rdfs:label "целевой вариант (каркас)"@ru , "target variant (spec)"@en ;
+    rdfs:comment "Вариант-каркас, для которого нужно произвести содержимое (seed и фактические ИПД/ПЗ уже заданы сметой)."@ru ,
+        "The variant spec whose content is to be produced (the seed and the actual tools/subjects are already fixed by the plan)."@en .
+
+krm:assignedTo a owl:ObjectProperty ;
+    rdfs:domain krm:WorkItem ; rdfs:range krm:Expert ;
+    rdfs:label "назначено эксперту"@ru , "assigned to"@en .
+
+krm:rejectedBy a owl:ObjectProperty ;
+    rdfs:domain krm:WorkItem ; rdfs:range krm:Expert ;
+    rdfs:label "отклонено экспертом"@ru , "rejected by"@en ;
+    rdfs:comment "Эксперты, отклонившие элемент очереди (история; множественное). Когда отклонили все подходящие — элемент остаётся без krm:assignedTo (очередь без эксперта) и эскалируется админу."@ru ,
+        "Experts who rejected the work item (history; multi-valued). When all suitable experts rejected it, the item stays without krm:assignedTo (queue without an expert) and is escalated to the admin."@en .
+
+krm:authoringMode a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:WorkItem ; rdfs:range skos:Concept ;
+    rdfs:label "режим авторинга"@ru , "authoring mode"@en ;
+    rdfs:comment "Как создаётся единица: экспертом с нуля (пустой каркас) или агентом с отправкой эксперту на проверку (SKOS krm:authoringModes)."@ru ,
+        "How the unit is created: by an expert from scratch (empty frame) or by an agent and sent to an expert for review (SKOS krm:authoringModes)."@en .
+
+krm:workStatus a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:WorkItem ; rdfs:range skos:Concept ;
+    rdfs:label "статус работы"@ru , "work status"@en ;
+    rdfs:comment "Статус по шагам (SKOS krm:workStatuses): в очереди → написан → промпт → сгенерировано → проверено → принято / отклонено."@ru ,
+        "Per-step status (SKOS krm:workStatuses): queued → written → prompted → generated → validated → accepted / rejected."@en .
+
+krm:priority a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:WorkItem ; rdfs:range xsd:integer ;
+    rdfs:label "приоритет"@ru , "priority"@en .
+
+############################ СПРАВОЧНИКИ (SKOS) ############################
+
+krm:workKinds a skos:ConceptScheme ; rdfs:label "Виды работ очереди"@ru , "Work kinds"@en .
+krm:WK_GeneralDescriptor a skos:Concept ; skos:inScheme krm:workKinds ;
+    skos:prefLabel "обобщённый дескриптор"@ru , "general descriptor"@en ;
+    skos:definition "Написать обобщённый дескриптор для КИУ (krm:targetKIU), у которого его нет. Блокирует всё ниже по каскаду."@ru .
+krm:WK_Descriptor a skos:Concept ; skos:inScheme krm:workKinds ;
+    skos:prefLabel "частный дескриптор"@ru , "specific descriptor"@en ;
+    skos:definition "Написать частный дескриптор для обобщённого (krm:targetGeneralDescriptor); их 1–3."@ru .
+krm:WK_Template   a skos:Concept ; skos:inScheme krm:workKinds ; skos:prefLabel "задание"@ru , "task"@en .
+krm:WK_Variant    a skos:Concept ; skos:inScheme krm:workKinds ; skos:prefLabel "вариант задания"@ru , "task variant"@en .
+
+krm:workStatuses a skos:ConceptScheme ; rdfs:label "Статусы работы очереди"@ru , "Work statuses"@en .
+krm:WS_Queued    a skos:Concept ; skos:inScheme krm:workStatuses ; skos:prefLabel "в очереди"@ru , "queued"@en .
+krm:WS_Written   a skos:Concept ; skos:inScheme krm:workStatuses ; skos:prefLabel "написан"@ru , "written"@en .
+krm:WS_Prompted  a skos:Concept ; skos:inScheme krm:workStatuses ; skos:prefLabel "оформлен промпт"@ru , "prompted"@en .
+krm:WS_Generated a skos:Concept ; skos:inScheme krm:workStatuses ; skos:prefLabel "сгенерировано"@ru , "generated"@en .
+krm:WS_Validated a skos:Concept ; skos:inScheme krm:workStatuses ; skos:prefLabel "проверено"@ru , "validated"@en .
+krm:WS_Accepted  a skos:Concept ; skos:inScheme krm:workStatuses ; skos:prefLabel "принято"@ru , "accepted"@en .
+krm:WS_Rejected  a skos:Concept ; skos:inScheme krm:workStatuses ; skos:prefLabel "отклонено"@ru , "rejected"@en .
+krm:WS_Error     a skos:Concept ; skos:inScheme krm:workStatuses ; skos:prefLabel "ошибка"@ru , "error"@en ;
+    skos:definition "Сбой генерации/валидации (в отличие от содержательного отклонения WS_Rejected); для панели «есть ли ошибки»."@ru .
+
+krm:authoringModes a skos:ConceptScheme ; rdfs:label "Режимы авторинга"@ru , "Authoring modes"@en .
+krm:AM_Expert      a skos:Concept ; skos:inScheme krm:authoringModes ; skos:prefLabel "экспертом с нуля"@ru , "expert from scratch"@en ;
+    skos:definition "Эксперт получает пустой каркас и пишет задание сам."@ru .
+krm:AM_AgentReview a skos:Concept ; skos:inScheme krm:authoringModes ; skos:prefLabel "агент + проверка экспертом"@ru , "agent + expert review"@en ;
+    skos:definition "Агент генерирует задание, эксперту достаточно нажать «проверено» (приёмка)."@ru .
+
+############################ КЛЮЧИ ############################
+
+krm:TestVariant owl:hasKey ( krm:code ) .
+krm:WorkItem owl:hasKey ( krm:code ) .

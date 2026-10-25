@@ -1,0 +1,191 @@
+# task-shapes.ttl — SHACL-проверки задания при жёсткой типизации (4 типа).
+# Не входит в owl:imports зонтика (это валидация, не схема). Грузится при проверке/авторинге.
+#
+# Ключевое правило (оно же — сигнал авторинга: какие поля показывать эксперту и требовать):
+#   тип «код»            → обязательны язык, ≥1 автотест с лимитом времени, эталонное решение;
+#   тип НЕ «код»         → язык, библиотеки, автотесты и эталон ЗАПРЕЩЕНЫ (их не бывает у теста
+#                          и у открытого вопроса) — обратная сторона жёсткой типизации;
+#   тип «открытый текст» → обязателен рубрикатор (единственный тип с экспертной проверкой).
+#
+# Содержимое задания (текст, варианты ответа, картинки, код эталона, входы/выходы тестов) лежит ВНЕ
+# графа — здесь проверяется только наличие ссылки krm:contentRef, а не сам контент.
+
+@prefix krm:  <http://example.org/krm#> .
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+############################ ЗАДАНИЕ: БАЗОВАЯ СТРУКТУРА ############################
+
+krm:TaskTemplateShape a sh:NodeShape ;
+    sh:targetClass krm:TaskTemplate ;
+
+    sh:property [ sh:path krm:forDescriptor ; sh:minCount 1 ; sh:maxCount 1 ; sh:class krm:Descriptor ;
+                  sh:message "У задания должен быть ровно один частный дескриптор."@ru ] ;
+
+    # Тип — ровно один из четырёх (перечень замкнут; расширение — только со сменой версии онтологии)
+    sh:property [ sh:path krm:taskType ; sh:minCount 1 ; sh:maxCount 1 ;
+                  sh:in ( krm:TT_SingleChoice krm:TT_MultipleChoice krm:TT_OpenText krm:TT_Code ) ;
+                  sh:message "У задания должен быть ровно один тип из четырёх: выбор одного / выбор нескольких / открытый текст / код."@ru ] ;
+
+    # Две НЕЗАВИСИМЫЕ оценки эксперта
+    sh:property [ sh:path krm:difficulty ; sh:minCount 1 ; sh:maxCount 1 ;
+                  sh:datatype xsd:integer ; sh:minInclusive 1 ; sh:maxInclusive 5 ;
+                  sh:message "Эксперт обязан проставить сложность задания (целое 1–5). Сложность не выводится ни из уровня освоения КИУ, ни из времени выполнения."@ru ] ;
+    sh:property [ sh:path krm:estimatedMinutes ; sh:minCount 1 ; sh:maxCount 1 ;
+                  sh:datatype xsd:integer ; sh:minInclusive 1 ;
+                  sh:message "Эксперт обязан проставить ожидаемое время выполнения (мин). Со сложностью связано лишь косвенно."@ru ] ;
+
+    # Оси классификации и разбаловка — нужны сборщику ВТ
+    sh:property [ sh:path krm:practiceOriented ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:boolean ;
+                  sh:message "Укажите практико-ориентированность задания (отдельная ось, не выводится из типа)."@ru ] ;
+    sh:property [ sh:path krm:maxScore ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:decimal ;
+                  sh:message "У задания должен быть максимальный (сырой) балл — он суммируется в разбаловку варианта теста."@ru ] ;
+
+    # Не более одной ссылки на содержимое. НАЛИЧИЕ ссылки здесь НЕ требуется:
+    # задание с метаданными, но без krm:contentRef — это ЗАКОННЫЙ каркас сметы (запланировано,
+    # но ещё не написано). Обязательность ссылки проверяется там, где задание реально предъявляется
+    # студенту, — см. krm:TestVariantContentShape ниже.
+    sh:property [ sh:path krm:contentRef ; sh:maxCount 1 ;
+                  sh:message "У задания не может быть более одной ссылки на содержимое."@ru ] .
+
+# --- Каркас сметы: задание запланировано, но содержимое ещё не написано (readiness, не ошибка) ---
+# ВНИМАНИЕ: sh:severity на NodeShape НЕ наследуется вложенными sh:property (в отличие от sh:sparql,
+# где она берётся с объемлющего шейпа) — severity надо ставить внутри самого property-шейпа.
+krm:TaskAuthoringShape a sh:NodeShape ;
+    sh:targetClass krm:TaskTemplate ;
+    sh:property [ sh:path krm:contentRef ; sh:minCount 1 ; sh:severity sh:Warning ;
+                  sh:message "Задание запланировано (метаданные есть), но содержимое ещё не написано — нет krm:contentRef. Это каркас сметы: его метаданные и есть ТЗ на написание."@ru ] .
+
+# --- ОСНОВАНИЕ ОТВЕТА: у написанного задания должно быть обоснование правильности (Warning) ---
+# Каркас без содержимого — законно без основания; но раз задание НАПИСАНО (есть contentRef), у него
+# обязано быть krm:hasRationale (почему правильный ответ верен). Severity Warning (readiness-сигнал).
+krm:RationaleShape a sh:NodeShape ;
+    sh:targetClass krm:TaskTemplate ;
+    sh:severity sh:Warning ;
+    sh:sparql [
+        sh:message "Задание написано (есть krm:contentRef), но нет ОСНОВАНИЯ ответа (krm:hasRationale) — обоснования, почему правильный ответ верен."@ru ;
+        sh:select """
+            PREFIX krm: <http://example.org/krm#>
+            SELECT $this WHERE {
+                $this krm:contentRef ?c .
+                FILTER NOT EXISTS { $this krm:hasRationale ?r }
+            }""" ] .
+
+############################ УСЛОВНАЯ ОБЯЗАТЕЛЬНОСТЬ: ТИП «КОД» ############################
+# Логика A → B как (¬A ∨ B).
+
+krm:CodeTaskShape a sh:NodeShape ;
+    sh:targetClass krm:TaskTemplate ;
+    sh:or (
+        [ sh:not [ sh:property [ sh:path krm:taskType ; sh:hasValue krm:TT_Code ] ] ]
+        [ sh:property [ sh:path krm:language ;             sh:minCount 1 ] ;
+          sh:property [ sh:path krm:hasTestCase ;          sh:minCount 1 ] ;
+          sh:property [ sh:path krm:hasReferenceSolution ; sh:minCount 1 ] ]
+    ) ;
+    sh:message "Задание типа «код» требует язык (один из пяти: SQL / Python / Java / C++ / C#), не менее одного автотеста и эталонное решение."@ru .
+
+############################ ЗАПРЕТ КОД-ПОЛЕЙ У ПРОЧИХ ТИПОВ ############################
+
+krm:NonCodeTaskShape a sh:NodeShape ;
+    sh:targetClass krm:TaskTemplate ;
+    sh:or (
+        [ sh:property [ sh:path krm:taskType ; sh:hasValue krm:TT_Code ] ]
+        [ sh:property [ sh:path krm:language ;             sh:maxCount 0 ] ;
+          sh:property [ sh:path krm:library ;              sh:maxCount 0 ] ;
+          sh:property [ sh:path krm:hasTestCase ;          sh:maxCount 0 ] ;
+          sh:property [ sh:path krm:hasReferenceSolution ; sh:maxCount 0 ] ]
+    ) ;
+    sh:message "Язык, библиотеки, автотесты и эталон допустимы ТОЛЬКО у заданий типа «код»."@ru .
+
+############################ УСЛОВНАЯ ОБЯЗАТЕЛЬНОСТЬ: ОТКРЫТЫЙ ТЕКСТ ############################
+
+krm:OpenTextTaskShape a sh:NodeShape ;
+    sh:targetClass krm:TaskTemplate ;
+    sh:or (
+        [ sh:not [ sh:property [ sh:path krm:taskType ; sh:hasValue krm:TT_OpenText ] ] ]
+        [ sh:property [ sh:path krm:hasRubric ; sh:minCount 1 ] ]
+    ) ;
+    sh:message "Открытый текстовый вопрос проверяется экспертом — у него обязателен рубрикатор с критериями."@ru .
+
+############################ АВТОТЕСТ ############################
+
+krm:TestCaseShape a sh:NodeShape ;
+    sh:targetClass krm:TestCase ;
+    sh:property [ sh:path krm:timeLimitMs ; sh:minCount 1 ; sh:datatype xsd:integer ;
+                  sh:message "У автотеста должен быть указан лимит времени (мс)."@ru ] ;
+    sh:property [ sh:path krm:contentRef ; sh:minCount 1 ;
+                  sh:message "У автотеста должна быть ссылка на содержимое (вход и ожидаемый выход хранятся вне графа)."@ru ] .
+
+############################ ВАРИАНТ ЗАДАНИЯ ############################
+
+krm:TaskVariantShape a sh:NodeShape ;
+    sh:targetClass krm:TaskVariant ;
+    sh:property [ sh:path krm:ofTemplate ; sh:minCount 1 ; sh:maxCount 1 ; sh:class krm:TaskTemplate ;
+                  sh:message "Вариант должен относиться ровно к одному заданию (тип, сложность, время наследуются от него и на варианте не дублируются)."@ru ] ;
+    sh:property [ sh:path krm:generationMode ; sh:minCount 1 ; sh:maxCount 1 ;
+                  sh:in ( krm:GM_Seed krm:GM_Agent ) ;
+                  sh:message "У варианта должен быть сценарий порождения: детерминированный (seed) или агентный."@ru ] ;
+    sh:property [ sh:path krm:seed ; sh:minCount 1 ; sh:maxCount 1 ;
+                  sh:message "У варианта должен быть seed (воспроизводимость)."@ru ] ;
+    # Как и у задания: отсутствие ссылки — законный каркас сметы, а не ошибка.
+    sh:property [ sh:path krm:contentRef ; sh:maxCount 1 ;
+                  sh:message "У варианта не может быть более одной ссылки на содержимое."@ru ] .
+
+############################ ЖЁСТКО: ЧТО ПРЕДЪЯВЛЯЕТСЯ СТУДЕНТУ — НАПИСАНО ############################
+# Каркас без содержимого допустим В БАНКЕ (это смета), но НЕ в варианте теста: студенту нельзя
+# показать задание, которого никто не написал. Здесь — Violation, а не предупреждение.
+
+krm:TestVariantContentShape a sh:NodeShape ;
+    sh:targetClass krm:TestVariant ;
+    sh:sparql [
+        sh:message "В вариант теста включён вариант задания {?v} без содержимого (нет krm:contentRef) — студенту предъявлять нечего."@ru ;
+        sh:select """
+            PREFIX krm: <http://example.org/krm#>
+            SELECT $this ?v WHERE {
+                $this krm:includesVariant ?v .
+                FILTER NOT EXISTS { ?v krm:contentRef ?c }
+            }""" ] ;
+    sh:sparql [
+        sh:message "В вариант теста включён вариант задания {?v}, чьё ЗАДАНИЕ {?t} ещё не написано (нет krm:contentRef)."@ru ;
+        sh:select """
+            PREFIX krm: <http://example.org/krm#>
+            SELECT $this ?v ?t WHERE {
+                $this krm:includesVariant ?v .
+                ?v krm:ofTemplate ?t .
+                FILTER NOT EXISTS { ?t krm:contentRef ?c }
+            }""" ] .
+
+############################ ЯЗЫК: РЕЖИМ ↔ ТИП, ПОКРЫТИЕ ВАРИАНТА (смета) ############################
+# Проверки применимы к задачам сметы, у которых проставлен krm:codeLanguageMode (старые задачи без него
+# не затрагиваются). Severity — Warning: это сигнал согласованности планирования, не жёсткий гейт.
+
+# Режим языка НЕЗАВИСИМ от исполняемости: НЕ-кодовое задание МОЖЕТ быть про язык/библиотеку (LangSpecific)
+# — напр. вопрос про pandas/SQL-синтаксис. Единственное жёсткое несоответствие: ИСПОЛНЯЕМОЕ (TT_Code) задание
+# не может быть NoCode (код есть — значит про код). Прочие сочетания допустимы.
+krm:LanguageModeShape a sh:NodeShape ;
+    sh:targetClass krm:TaskTemplate ;
+    sh:sparql [
+        sh:severity sh:Warning ;
+        sh:message "Режим языка {?m} не согласован: исполняемое задание (TT_Code) не может быть NoCode."@ru ;
+        sh:select """
+            PREFIX krm: <http://example.org/krm#>
+            SELECT $this ?tt ?m WHERE {
+                $this krm:taskType ?tt ; krm:codeLanguageMode ?m .
+                FILTER( ?tt = krm:TT_Code && ?m = krm:CLM_NoCode )
+            }""" ] .
+
+# Фактический язык варианта обязан входить в допустимое множество его задания (CQ22: фактические ИПД ⊆
+# заявленных). Проверяется только для LangSpecific-задач (у агностичных множество пусто — язык-среда пилота).
+krm:VariantLanguageCoverageShape a sh:NodeShape ;
+    sh:targetClass krm:TaskVariant ;
+    sh:sparql [
+        sh:severity sh:Warning ;
+        sh:message "Фактический язык варианта {?al} не входит в допустимые языки (krm:candidateLanguage) его задания {?t}."@ru ;
+        sh:select """
+            PREFIX krm: <http://example.org/krm#>
+            SELECT $this ?al ?t WHERE {
+                $this krm:actualTool ?al ; krm:ofTemplate ?t .
+                ?t krm:codeLanguageMode krm:CLM_LangSpecific .
+                FILTER NOT EXISTS { ?t krm:candidateLanguage ?al }
+            }""" ] .

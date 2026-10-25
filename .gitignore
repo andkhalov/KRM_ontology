@@ -1,0 +1,26 @@
+# Only the ontology and the release files belong to this repository.
+# Internal working materials of the source project stay out of it:
+research/
+legacy/
+UPDATE.md
+competency_questions.md
+*.internal.md
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# Reasoner and editor leftovers
+*.owl~
+*.ttl~
+*.bak
+catalog-v001.xml~
+
+# IDE and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

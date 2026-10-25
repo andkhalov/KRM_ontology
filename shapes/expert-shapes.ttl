@@ -1,0 +1,36 @@
+# expert-shapes.ttl — SHACL-проверки профиля эксперта (регистрация).
+# Не входит в owl:imports зонтика (это валидация, не схема). Грузится при проверке/регистрации.
+# Принцип: поля экспертизы — текстовые с подсказками из словарей (выбор из подсказки → ссылка на
+# концепт; свободный ввод → ключевое слово). Полнота профиля МЯГКАЯ: свободного текста достаточно.
+
+@prefix krm:  <http://example.org/krm#> .
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# --- Корректность полей: проверяется, когда поле заполнено (нарушение) ---
+krm:ExpertProfileShape a sh:NodeShape ;
+    sh:targetClass krm:ExpertProfile ;
+    sh:property [ sh:path krm:expertiseDirection ; sh:class krm:Direction ;
+                  sh:message "Область экспертизы должна ссылаться на направление из словаря (подсказка)."@ru ] ;
+    sh:property [ sh:path krm:expertiseSubject ; sh:class krm:Subject ;
+                  sh:message "Предмет экспертизы должен ссылаться на ПЗ из словаря (подсказка)."@ru ] ;
+    sh:property [ sh:path krm:expertiseTool ; sh:class krm:Tool ;
+                  sh:message "Инструмент экспертизы должен ссылаться на ИПД из словаря (подсказка)."@ru ] ;
+    sh:property [ sh:path krm:profileKeyword ; sh:nodeKind sh:Literal ;
+                  sh:message "Ключевое слово — свободная текстовая строка."@ru ] ;
+    sh:property [ sh:path krm:selfDescription ; sh:nodeKind sh:Literal ; sh:maxCount 1 ;
+                  sh:message "Самоописание — одна свободная текстовая строка."@ru ] .
+
+# --- Полнота при регистрации: МЯГКАЯ (предупреждение, не нарушение) ---
+# Достаточно свободного текста (самоописание) ИЛИ любого фасета экспертизы / ключевого слова.
+krm:ExpertProfileCompletenessShape a sh:NodeShape ;
+    sh:targetClass krm:ExpertProfile ;
+    sh:severity sh:Warning ;
+    sh:message "Профиль эксперта пуст: укажите экспертизу свободным текстом или хотя бы одно ключевое слово/область."@ru ;
+    sh:or (
+        [ sh:property [ sh:path krm:selfDescription    ; sh:minCount 1 ] ]
+        [ sh:property [ sh:path krm:profileKeyword     ; sh:minCount 1 ] ]
+        [ sh:property [ sh:path krm:expertiseDirection ; sh:minCount 1 ] ]
+        [ sh:property [ sh:path krm:expertiseSubject   ; sh:minCount 1 ] ]
+        [ sh:property [ sh:path krm:expertiseTool      ; sh:minCount 1 ] ]
+    ) .

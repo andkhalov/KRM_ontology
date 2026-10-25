@@ -1,0 +1,341 @@
+# cascade-shapes.ttl — SHACL-проверки каскада и бюджета варианта теста.
+# Не входит в owl:imports зонтика. Это проверки ПОЛНОТЫ каркаса (readiness gate), поэтому severity
+# Warning: в процессе наполнения каркасы неполны (это норма), а к моменту готовности должны
+# удовлетворяться. Пути — через инверсии (fromKIU/specializes/forDescriptor/ofTemplate), без опоры
+# на вывод ризонера.
+#
+# КАСКАД (двухуровневые дескрипторы):
+#   КИУ → обобщённый дескриптор (РОВНО 1) → частные дескрипторы (1–3) → задание → варианты (≥2).
+#   Прежнее правило «2–3 дескриптора на КИУ» отменено этим каскадом.
+#
+# БЮДЖЕТ ВТ: пороги НЕ зашиты константами — они читаются ИЗ ГРАФА, из политики сборки ассессмента
+# (krm:AssemblyPolicy). Поэтому ДС и ТОП ДС могут иметь разные бюджеты без правки этого файла.
+
+@prefix krm:  <http://example.org/krm#> .
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/krm/shapes/cascade> a owl:Ontology ;
+    sh:declare [ sh:prefix "krm" ; sh:namespace "http://example.org/krm#"^^xsd:anyURI ] ,
+               [ sh:prefix "xsd" ; sh:namespace "http://www.w3.org/2001/XMLSchema#"^^xsd:anyURI ] .
+
+############################ КАСКАД ДЕСКРИПТОРОВ ############################
+
+# --- У КИУ ровно один обобщённый дескриптор (1:1) ---
+# ОБЛАСТЬ ДЕЙСТВИЯ — только КИУ, ВЫБРАННЫЕ ВУЗАМИ (есть позиция профиля). Раньше гейт бил по
+# ВСЕМ КИУ класса и на голой КРМ 2.0 давал 1244 предупреждения — он мерил не то: дескрипторы
+# нужны не для всех 1244 КИУ, а только для тех, что вуз положил в профиль своей ОП. Объём работ
+# = число ВЫБРАННЫХ КИУ, и именно его считает смета.
+krm:SelectedKIUDescriptorShape a sh:NodeShape ;
+    sh:targetClass krm:KIU ;
+    sh:severity sh:Warning ;
+    sh:sparql [
+        sh:message "КИУ выбран вузом, но у него НЕТ обобщённого дескриптора — блокер всего каскада ниже (частные дескрипторы → задания → варианты → ВТ). КИУ ставится в очередь krm:WK_GeneralDescriptor."@ru ;
+        sh:select """
+            SELECT $this WHERE {
+                ?e krm:forKIU $this .
+                FILTER NOT EXISTS { ?gd krm:fromKIU $this }
+            }""" ] ;
+    sh:sparql [
+        sh:message "У КИУ более одного обобщённого дескриптора — связь должна быть 1:1."@ru ;
+        sh:select """
+            SELECT $this WHERE {
+                ?gd1 krm:fromKIU $this .
+                ?gd2 krm:fromKIU $this .
+                FILTER (STR(?gd1) < STR(?gd2))
+            }""" ] .
+
+# --- У обобщённого дескриптора 1–3 частных ---
+krm:GeneralDescriptorShape a sh:NodeShape ;
+    sh:targetClass krm:GeneralDescriptor ;
+    sh:property [ sh:path [ sh:inversePath krm:specializes ] ;
+                  sh:minCount 1 ; sh:maxCount 3 ; sh:severity sh:Warning ;
+                  sh:message "Обобщённый дескриптор должен раскрываться 1–3 частными дескрипторами."@ru ] .
+
+# --- ≥2 ОБОБЩЁННЫХ ЗАДАНИЯ (TaskTemplate) на частный дескриптор (методика: не одно задание) ---
+krm:TemplatePerDescriptorShape a sh:NodeShape ;
+    sh:targetClass krm:Descriptor ;
+    sh:property [ sh:path [ sh:inversePath krm:forDescriptor ] ;
+                  sh:minCount 2 ; sh:severity sh:Warning ;
+                  sh:message "У частного дескриптора должно быть не менее ДВУХ обобщённых заданий (TaskTemplate), различающихся по типу/объекту; каждое затем специализируется вариантами."@ru ] .
+
+# --- ≥2 варианта на частный дескриптор (через задания): descriptor → tasks → variants ---
+krm:VariantPerDescriptorShape a sh:NodeShape ;
+    sh:targetClass krm:Descriptor ;
+    sh:property [ sh:path ( [ sh:inversePath krm:forDescriptor ] [ sh:inversePath krm:ofTemplate ] ) ;
+                  sh:minCount 2 ; sh:severity sh:Warning ;
+                  sh:message "К моменту готовности у частного дескриптора должно быть не менее двух вариантов задания (специализация по seed/объекту)."@ru ] .
+
+############################ ПОЛИТИКА СБОРКИ: ОДНА НА АССЕССМЕНТ ############################
+
+krm:AssessmentPolicyShape a sh:NodeShape ;
+    sh:targetClass krm:Assessment ;
+    sh:property [ sh:path krm:hasPolicy ; sh:minCount 1 ; sh:maxCount 1 ; sh:class krm:AssemblyPolicy ;
+                  sh:severity sh:Warning ;
+                  sh:message "У ассессмента должна быть ровно одна политика сборки варианта теста (диапазоны и квоты)."@ru ] .
+
+############################ БЮДЖЕТ ВТ: ДИАПАЗОНЫ ИЗ ПОЛИТИКИ ############################
+# Сравниваем агрегаты ВТ с диапазонами политики того ассессмента, которому ВТ принадлежит.
+
+krm:TestVariantBudgetShape a sh:NodeShape ;
+    sh:targetClass krm:TestVariant ;
+    sh:severity sh:Warning ;   # readiness-гейт: на неполном каркасе нарушения — норма
+
+    # число заданий
+    sh:sparql [
+        sh:message "Число заданий в ВТ ({?value}) вне диапазона политики сборки: {?min}–{?max}."@ru ;
+        sh:select """
+            SELECT $this ?value ?min ?max WHERE {
+                ?a krm:hasTestVariant $this .
+                ?a krm:hasPolicy ?p .
+                ?p krm:minTaskCount ?min .
+                ?p krm:maxTaskCount ?max .
+                $this krm:taskCount ?value .
+                FILTER (?value < ?min || ?value > ?max)
+            }""" ] ;
+
+    # суммарное время
+    sh:sparql [
+        sh:message "Суммарное время ВТ ({?value} мин) вне диапазона политики сборки: {?min}–{?max}."@ru ;
+        sh:select """
+            SELECT $this ?value ?min ?max WHERE {
+                ?a krm:hasTestVariant $this .
+                ?a krm:hasPolicy ?p .
+                ?p krm:minDuration ?min .
+                ?p krm:maxDuration ?max .
+                $this krm:durationMin ?value .
+                FILTER (?value < ?min || ?value > ?max)
+            }""" ] ;
+
+    # суммарная сложность
+    sh:sparql [
+        sh:message "Суммарная сложность ВТ ({?value}) вне диапазона политики сборки: {?min}–{?max}."@ru ;
+        sh:select """
+            SELECT $this ?value ?min ?max WHERE {
+                ?a krm:hasTestVariant $this .
+                ?a krm:hasPolicy ?p .
+                ?p krm:minDifficultySum ?min .
+                ?p krm:maxDifficultySum ?max .
+                $this krm:difficultySum ?value .
+                FILTER (?value < ?min || ?value > ?max)
+            }""" ] ;
+
+    # разбаловка
+    sh:sparql [
+        sh:message "Суммарный балл ВТ ({?value}) вне диапазона политики сборки: {?min}–{?max}."@ru ;
+        sh:select """
+            SELECT $this ?value ?min ?max WHERE {
+                ?a krm:hasTestVariant $this .
+                ?a krm:hasPolicy ?p .
+                ?p krm:minScoreSum ?min .
+                ?p krm:maxScoreSum ?max .
+                $this krm:scoreSum ?value .
+                FILTER (?value < ?min || ?value > ?max)
+            }""" ] .
+
+############################ БЮДЖЕТ ВТ: СОГЛАСОВАННОСТЬ АГРЕГАТОВ ############################
+# Хранимые агрегаты — производные. Проверяем, что они совпадают с суммой по включённым заданиям
+# (иначе панель администратора будет показывать неправду).
+
+krm:TestVariantAggregateShape a sh:NodeShape ;
+    sh:targetClass krm:TestVariant ;
+    sh:severity sh:Warning ;   # readiness-гейт: на неполном каркасе нарушения — норма
+
+    sh:sparql [
+        sh:message "krm:taskCount ({?value}) не совпадает с фактическим числом включённых вариантов ({?actual})."@ru ;
+        sh:select """
+            SELECT $this ?value ?actual WHERE {
+                $this krm:taskCount ?value .
+                { SELECT $this (COUNT(?v) AS ?actual) WHERE {
+                    $this krm:includesVariant ?v .
+                  } GROUP BY $this }
+                FILTER (?value != ?actual)
+            }""" ] ;
+
+    sh:sparql [
+        sh:message "krm:durationMin ({?value}) не совпадает с суммой krm:estimatedMinutes по заданиям ВТ ({?actual})."@ru ;
+        sh:select """
+            SELECT $this ?value ?actual WHERE {
+                $this krm:durationMin ?value .
+                { SELECT $this (SUM(?m) AS ?actual) WHERE {
+                    $this krm:includesVariant ?v . ?v krm:ofTemplate ?t . ?t krm:estimatedMinutes ?m .
+                  } GROUP BY $this }
+                FILTER (?value != ?actual)
+            }""" ] ;
+
+    sh:sparql [
+        sh:message "krm:difficultySum ({?value}) не совпадает с суммой krm:difficulty по заданиям ВТ ({?actual})."@ru ;
+        sh:select """
+            SELECT $this ?value ?actual WHERE {
+                $this krm:difficultySum ?value .
+                { SELECT $this (SUM(?d) AS ?actual) WHERE {
+                    $this krm:includesVariant ?v . ?v krm:ofTemplate ?t . ?t krm:difficulty ?d .
+                  } GROUP BY $this }
+                FILTER (?value != ?actual)
+            }""" ] .
+
+############################ КВОТЫ ДОЛЕЙ ПО ТИПАМ ЗАДАНИЙ ############################
+# Доля заданий каждого типа в ВТ — в границах квоты политики. Так выражается правило
+# «≤20% с экспертной проверкой» (квота maxShare 0,2 на krm:TT_OpenText — единственный экспертный
+# тип) и балансировка прочих типов. Тип с нулём заданий тоже проверяется (COALESCE → 0).
+
+krm:TestVariantQuotaShape a sh:NodeShape ;
+    sh:targetClass krm:TestVariant ;
+    sh:severity sh:Warning ;   # readiness-гейт: на неполном каркасе нарушения — норма
+    sh:sparql [
+        sh:message "Доля заданий типа {?type} в ВТ = {?share}, что вне квоты политики сборки [{?min}; {?max}]."@ru ;
+        sh:select """
+            SELECT $this ?type ?share ?min ?max WHERE {
+                ?a krm:hasTestVariant $this .
+                ?a krm:hasPolicy ?p .
+                ?p krm:hasQuota ?q .
+                ?q krm:quotaOn ?type .
+                OPTIONAL { ?q krm:minShare ?min }
+                OPTIONAL { ?q krm:maxShare ?max }
+                { SELECT $this (COUNT(?va) AS ?total) WHERE {
+                    $this krm:includesVariant ?va .
+                  } GROUP BY $this }
+                OPTIONAL {
+                  { SELECT $this ?type (COUNT(?vb) AS ?n0) WHERE {
+                      $this krm:includesVariant ?vb . ?vb krm:ofTemplate ?tb . ?tb krm:taskType ?type .
+                    } GROUP BY $this ?type }
+                }
+                BIND (COALESCE(?n0, 0) AS ?n)
+                BIND (xsd:decimal(?n) / xsd:decimal(?total) AS ?share)
+                FILTER (?total > 0)
+                FILTER ( (BOUND(?min) && ?share < ?min) || (BOUND(?max) && ?share > ?max) )
+            }""" ] .
+
+############################ КВОТА: ДОЛЯ ПРАКТИКО-ОРИЕНТИРОВАННЫХ (ОСЬ 60/40) ############################
+# Вторая, независимая от типа ось классификации: закрытый тест на реальном кейсе практичен,
+# а код-задание может быть учебным. Раньше жила только прозой.
+
+krm:TestVariantPracticeShape a sh:NodeShape ;
+    sh:targetClass krm:TestVariant ;
+    sh:severity sh:Warning ;
+    sh:sparql [
+        sh:message "Доля практико-ориентированных заданий в ВТ = {?share}, что вне квоты политики сборки [{?min}; {?max}]."@ru ;
+        sh:select """
+            SELECT $this ?share ?min ?max WHERE {
+                ?a krm:hasTestVariant $this .
+                ?a krm:hasPolicy ?p .
+                ?p krm:minPracticeShare ?min .
+                ?p krm:maxPracticeShare ?max .
+                { SELECT $this (COUNT(?va) AS ?total) WHERE {
+                    $this krm:includesVariant ?va .
+                  } GROUP BY $this }
+                OPTIONAL {
+                  { SELECT $this (COUNT(?vb) AS ?n0) WHERE {
+                      $this krm:includesVariant ?vb .
+                      ?vb krm:ofTemplate ?tb .
+                      ?tb krm:practiceOriented true .
+                    } GROUP BY $this }
+                }
+                BIND (COALESCE(?n0, 0) AS ?n)
+                FILTER (?total > 0)
+                BIND (xsd:decimal(?n) / xsd:decimal(?total) AS ?share)
+                FILTER (?share < ?min || ?share > ?max)
+            }""" ] .
+
+############################ КВОТА: ЗАДАНИЯ ПРЕДШЕСТВУЮЩИХ УРОВНЕЙ (10–15%) ############################
+# «Предшествующий уровень» = задание, чей КИУ относится к ТОМУ ЖЕ ИНДИКАТОРУ, что и КИУ,
+# назначенный студенту профилем ОП, но стоит на уровне НИЖЕ назначенного (krm:levelRank меньше).
+# Пример: студенту по индикатору MF-1.1 назначен продвинутый уровень (П, ранг 3) — задание того
+# же индикатора на базовом уровне (Б, ранг 1) и есть задание предшествующего уровня.
+# Смысл правила: проверить, что фундамент под требуемым уровнем не провален.
+# ВАЖНО: уровень — это требование ОП, а НЕ сложность задания (krm:difficulty). Задание
+# предшествующего уровня вполне может быть трудным.
+
+krm:TestVariantPriorLevelShape a sh:NodeShape ;
+    sh:targetClass krm:TestVariant ;
+    sh:severity sh:Warning ;
+    sh:sparql [
+        sh:message "Доля заданий предшествующих уровней в ВТ = {?share}, что вне квоты политики сборки [{?min}; {?max}]."@ru ;
+        sh:select """
+            SELECT $this ?share ?min ?max WHERE {
+                ?a krm:hasTestVariant $this .
+                ?a krm:hasPolicy ?p .
+                ?p krm:minPriorLevelShare ?min .
+                ?p krm:maxPriorLevelShare ?max .
+                { SELECT $this (COUNT(?va) AS ?total) WHERE {
+                    $this krm:includesVariant ?va .
+                  } GROUP BY $this }
+                OPTIONAL {
+                  { SELECT $this (COUNT(DISTINCT ?vb) AS ?n0) WHERE {
+                      $this krm:forStudent ?s .
+                      ?s krm:hasTestingProfile/krm:hasEntry ?e .
+                      ?e krm:forKIU ?assignedKIU .
+                      ?assignedKIU krm:hasIndicator ?ind ; krm:hasLevel ?assignedLvl .
+                      ?assignedLvl krm:levelRank ?assignedRank .
+                      $this krm:includesVariant ?vb .
+                      ?vb krm:ofTemplate/krm:forDescriptor/krm:specializes/krm:fromKIU ?taskKIU .
+                      ?taskKIU krm:hasIndicator ?ind ; krm:hasLevel ?taskLvl .
+                      ?taskLvl krm:levelRank ?taskRank .
+                      FILTER (?taskRank < ?assignedRank)
+                    } GROUP BY $this }
+                }
+                BIND (COALESCE(?n0, 0) AS ?n)
+                FILTER (?total > 0)
+                BIND (xsd:decimal(?n) / xsd:decimal(?total) AS ?share)
+                FILTER (?share < ?min || ?share > ?max)
+            }""" ] .
+
+############################ УНИКАЛЬНОСТЬ НАБОРОВ ############################
+# Требование: у двух студентов не должно быть ИДЕНТИЧНЫХ наборов заданий. Совпадение отдельных
+# заданий допустимо (банк общий, и на части заданий сиды разные) — запрещено полное совпадение
+# множества включённых вариантов. Проверка — взаимное включение множеств (без агрегатов).
+# Дополнительно: у каждого ВТ свой seed (иначе воспроизведение двух ВТ даст одно и то же).
+
+krm:TestVariantUniquenessShape a sh:NodeShape ;
+    sh:targetClass krm:TestVariant ;
+    sh:severity sh:Warning ;
+    sh:sparql [
+        sh:message "Набор заданий совпадает с вариантом теста {?other} — у двух студентов идентичные ВТ."@ru ;
+        sh:select """
+            SELECT $this ?other WHERE {
+                ?a krm:hasTestVariant $this .
+                ?a krm:hasTestVariant ?other .
+                FILTER (STR($this) < STR(?other))
+                FILTER NOT EXISTS {
+                    $this krm:includesVariant ?v1 .
+                    FILTER NOT EXISTS { ?other krm:includesVariant ?v1 }
+                }
+                FILTER NOT EXISTS {
+                    ?other krm:includesVariant ?v2 .
+                    FILTER NOT EXISTS { $this krm:includesVariant ?v2 }
+                }
+            }""" ] ;
+    sh:sparql [
+        sh:message "seed варианта теста совпадает с {?other} — ВТ неразличимы при воспроизведении."@ru ;
+        sh:select """
+            SELECT $this ?other ?seed WHERE {
+                ?a krm:hasTestVariant $this .
+                ?a krm:hasTestVariant ?other .
+                FILTER (STR($this) < STR(?other))
+                $this krm:seed ?seed .
+                ?other krm:seed ?seed .
+            }""" ] .
+
+############################ ПОКРЫТИЕ КИУ ############################
+# ВТ обязан покрывать КИУ, назначенные студенту профилем его ОП.
+
+krm:TestVariantCoverageShape a sh:NodeShape ;
+    sh:targetClass krm:TestVariant ;
+    sh:severity sh:Warning ;   # readiness-гейт: на неполном каркасе нарушения — норма
+    sh:sparql [
+        sh:message "ВТ не покрывает назначенный студенту КИУ {?kiu} (есть в профиле ОП, нет ни одного задания)."@ru ;
+        sh:select """
+            SELECT $this ?kiu WHERE {
+                $this krm:forStudent ?s .
+                ?s krm:hasTestingProfile ?prof .
+                ?prof krm:hasEntry ?e .
+                ?e krm:forKIU ?kiu .
+                FILTER NOT EXISTS {
+                    $this krm:includesVariant ?v .
+                    ?v krm:ofTemplate ?t .
+                    ?t krm:forDescriptor ?d .
+                    ?d krm:specializes ?gd .
+                    ?gd krm:fromKIU ?kiu .
+                }
+            }""" ] .

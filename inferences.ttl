@@ -1,0 +1,104 @@
+# inferences.ttl — правила вывода (OWL 2 RL): достраивание рёбер ризонером.
+# Только RL-совместимые конструкции: owl:inverseOf и owl:propertyChainAxiom.
+# Материализуются обратные навигационные рёбра и «короткие» пути каскада.
+#
+# ЧТО ИЗМЕНИЛОСЬ. Раньше здесь жили СЕМЬ цепочек-костылей, восстанавливавших пути, которых не было
+# в структуре: kiuCompetence/kiuBlock/kiuDomain (вверх по КРМ) и kiuDescriptor/descriptorKIU/
+# taskKIU/variantKIU (вниз и вверх по каскаду). Они удалены — потому что пути теперь ЕСТЬ
+# В СТРУКТУРЕ, а не достраиваются правилами:
+#   krm:broaderTransitive  (krm-core) — предки узла в дереве КРМ; четыре «вверх»-ребра ⊑ krm:broader
+#   krm:derivedFrom        (kim)      — предки узла в каскаде; четыре ребра каскада ⊑ krm:derivedFrom
+# Оба транзитивны, оба RL-безопасны (prp-trp). Это и есть «работать на уровне структуры».
+#
+# Здесь остались только те цепочки, которые СКЛЕИВАЮТ РАЗНЫЕ отношения (их одним свойством не
+# выразить): матрица «студент × КИУ» (через профиль) и покрытие ВТ (через включение вариантов).
+
+@prefix krm:  <http://example.org/krm#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix dct:  <http://purl.org/dc/terms/> .
+
+<http://example.org/krm/inferences> a owl:Ontology ;
+    dct:title "Правила вывода (OWL 2 RL)"@ru , "Inference rules (OWL 2 RL)"@en ;
+    owl:versionInfo "1.0.0" ;
+    owl:imports <http://example.org/krm/process> ;
+    dct:description "RL-совместимые аксиомы, по которым ризонер материализует рёбра: обратные свойства и цепочки свойств (короткие пути каскада от КИУ до варианта теста)."@ru ,
+        "RL-compatible axioms by which a reasoner materializes edges: inverse properties and property chains (cascade shortcuts from a CIL down to a test variant)."@en .
+
+############################ ОБРАТНЫЕ СВОЙСТВА (двусторонняя навигация) ############################
+
+krm:hasGeneralDescriptor a owl:ObjectProperty ; rdfs:subPropertyOf krm:derives ; owl:inverseOf krm:fromKIU ;
+    rdfs:domain krm:KIU ; rdfs:range krm:GeneralDescriptor ;
+    rdfs:label "имеет обобщённый дескриптор"@ru , "has general descriptor"@en ;
+    rdfs:comment "Ровно один на КИУ (кардинальность — в SHACL)."@ru , "Exactly one per CIL (cardinality in SHACL)."@en .
+
+krm:hasSpecificDescriptor a owl:ObjectProperty ; rdfs:subPropertyOf krm:derives ; owl:inverseOf krm:specializes ;
+    rdfs:domain krm:GeneralDescriptor ; rdfs:range krm:Descriptor ;
+    rdfs:label "имеет частный дескриптор"@ru , "has specific descriptor"@en ;
+    rdfs:comment "1–3 на обобщённый (кардинальность — в SHACL)."@ru , "1–3 per general descriptor (cardinality in SHACL)."@en .
+
+krm:hasTemplate a owl:ObjectProperty ; rdfs:subPropertyOf krm:derives ; owl:inverseOf krm:forDescriptor ;
+    rdfs:domain krm:Descriptor ; rdfs:range krm:TaskTemplate ;
+    rdfs:label "имеет задание"@ru , "has task"@en .
+
+krm:hasVariant a owl:ObjectProperty ; rdfs:subPropertyOf krm:derives ; owl:inverseOf krm:ofTemplate ;
+    rdfs:domain krm:TaskTemplate ; rdfs:range krm:TaskVariant ;
+    rdfs:label "имеет вариант задания"@ru , "has variant"@en .
+
+# Обратные к провенансу/приёмке — нужны для определения готовности варианта (krm:ReadyVariant).
+krm:hasValidation a owl:ObjectProperty ; owl:inverseOf krm:validationOf ;
+    rdfs:domain krm:GeneratedArtefact ; rdfs:range krm:Validation ;
+    rdfs:label "имеет валидацию"@ru , "has validation"@en .
+
+krm:hasAcceptance a owl:ObjectProperty ; owl:inverseOf krm:acceptanceOf ;
+    rdfs:domain krm:GeneratedArtefact ; rdfs:range krm:ExpertAcceptance ;
+    rdfs:label "имеет приёмку"@ru , "has acceptance"@en .
+
+############################ ЦЕПОЧКИ: СКЛЕЙКА РАЗНЫХ ОТНОШЕНИЙ ############################
+
+krm:kiuRole a owl:ObjectProperty ;
+    owl:propertyChainAxiom ( krm:hasLaborFunction krm:ofRole ) ;
+    rdfs:domain krm:KIU ; rdfs:range krm:Role ;
+    rdfs:label "роль КИУ"@ru , "CIL role"@en ;
+    rdfs:comment "КИУ → трудовая функция → роль."@ru , "CIL → labor function → role."@en .
+
+
+krm:taskLevel a owl:ObjectProperty ;
+    owl:propertyChainAxiom ( krm:forDescriptor krm:specializes krm:fromKIU krm:hasLevel ) ;
+    rdfs:domain krm:TaskTemplate ; rdfs:range krm:MasteryLevel ;
+    rdfs:label "уровень освоения задания"@ru , "task mastery level"@en ;
+    rdfs:comment "Уровень Б/С/П, унаследованный заданием от КИУ. Нужен для квоты «10–15% заданий предшествующих уровней» в политике сборки. ВНИМАНИЕ: уровень — это требование ОП, он НЕ равен сложности задания (krm:difficulty) и не заменяет её."@ru ,
+        "The B/S/P mastery level a task inherits from its CIL. Needed for the 'a 10–15% share of prior-level tasks' quota in the assembly policy. NOTE: the level is a program requirement; it is NOT the task's difficulty (krm:difficulty) and does not substitute for it."@en .
+
+krm:testVariantKIU a owl:ObjectProperty ;
+    owl:propertyChainAxiom ( krm:includesVariant krm:ofTemplate krm:forDescriptor krm:specializes krm:fromKIU ) ;
+    rdfs:domain krm:TestVariant ; rdfs:range krm:KIU ;
+    rdfs:label "КИУ варианта теста"@ru , "test-variant CIL"@en ;
+    rdfs:comment "Покрытые вариантом теста КИУ; сверяются с КИУ назначенного профиля ОП (krm:studentKIU)."@ru ,
+        "CILs covered by a test variant; checked against the CILs of the assigned program profile (krm:studentKIU)."@en .
+
+############################ ЦЕПОЧКИ: ПРОФИЛЬ И СТУДЕНТ ############################
+
+krm:profileKIU a owl:ObjectProperty ;
+    owl:propertyChainAxiom ( krm:hasEntry krm:forKIU ) ;
+    rdfs:domain krm:ProgramTestingProfile ; rdfs:range krm:KIU ;
+    rdfs:label "КИУ профиля"@ru , "profile CIL"@en .
+
+krm:studentKIU a owl:ObjectProperty ;
+    owl:propertyChainAxiom ( krm:hasTestingProfile krm:hasEntry krm:forKIU ) ;
+    rdfs:domain krm:Student ; rdfs:range krm:KIU ;
+    rdfs:label "КИУ студента"@ru , "student CIL"@en ;
+    rdfs:comment "Матрица «студент × КИУ» как прямое ребро: студент → профиль → позиция → КИУ."@ru ,
+        "The student × CIL matrix as a direct edge: student → profile → entry → CIL."@en .
+
+############################ ДИЗЪЮНКТНОСТЬ УРОВНЕЙ КАСКАДА ############################
+# Дизъюнктность держим ТОЛЬКО там, где она несёт смысл: ступени каскада не должны схлопываться
+# (узел не может быть одновременно компетенцией и индикатором, дескриптором и заданием).
+# Прежняя простыня на 54 класса (и вторая, на верхнюю таксономию из 7 «корзин») удалена:
+# ~1400 попарных аксиом не давали ни одного вывода, а «корзины» заставляли каждый новый класс
+# приписывать ровно к одной из них и делали противоречием любую сущность двойной природы.
+# Тождественность узлов и так гарантирована детерминированной чеканкой IRI из кода (owl:hasKey).
+
+[] a owl:AllDisjointClasses ; owl:members (
+    krm:Competence krm:Indicator krm:KIU
+    krm:GeneralDescriptor krm:Descriptor krm:TaskTemplate krm:TaskVariant krm:TestVariant ) .

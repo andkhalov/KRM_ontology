@@ -1,0 +1,215 @@
+# campaign.ttl — Ассессмент как целое (аккумулирующий корень кампании оценивания).
+# Класс krm:Assessment = весь экзамен целиком: к нему привязаны главная матрица
+# (студенты × ОП × вузы × КИУ), очередь генерации заданий, собранные варианты теста (ВТ)
+# и сводка хода работ для администратора. Связывает actors/planning/assessment/process.
+# Импортирует definitions (вся схема + верхняя таксономия в области видимости). Аннотации ru/en.
+
+@prefix krm:  <http://example.org/krm#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix dct:  <http://purl.org/dc/terms/> .
+
+<http://example.org/krm/campaign> a owl:Ontology ;
+    dct:title "Ассессмент как целое (кампания оценивания)"@ru , "Assessment campaign (the whole exam)"@en ;
+    rdfs:label "Кампания (campaign)"@ru , "Campaign (campaign)"@en ;
+    owl:versionInfo "1.0.0" ;
+    owl:imports <http://example.org/krm/definitions> ;
+    dct:description "Аккумулирующий корень одного экзамена: главная матрица (студенты/ОП/вузы/КИУ через профили и спрос), очередь генерации заданий, собранные варианты теста и сводка хода работ для администратора."@ru ,
+        "The aggregate root of one exam: the main matrix (students/programs/universities/CILs via profiles and demand), the task-generation queue, the assembled test variants, and an admin work-progress summary."@en .
+
+############################ АССЕССМЕНТ (ЭКЗАМЕН ЦЕЛИКОМ) ############################
+
+krm:Assessment a owl:Class ;
+    rdfs:label "Ассессмент (экзамен целиком)"@ru , "Assessment (whole exam)"@en ;
+    rdfs:comment "Одна кампания оценивания целиком (например, «ассесмент 1 курса, осень 2026»). Аккумулирующий корень: к нему привязана главная матрица — какие студенты каких ОП каких вузов проверяются по каким КИУ (через профили тестирования и рассчитанный спрос), очередь генерации заданий, собранные варианты теста и статус хода работ. Идёт в рамках цикла (krm:inCycle) и по версии КРМ (krm:underKRMVersion)."@ru ,
+        "One whole assessment campaign (e.g. \"year-1 assessment, autumn 2026\"). The aggregate root: it carries the main matrix — which students of which programs of which universities are assessed on which CILs (via testing profiles and computed demand), the task-generation queue, the assembled test variants, and the work-progress status. Runs within a cycle (krm:inCycle) and under a KRM version (krm:underKRMVersion)."@en .
+
+############################ ИДЕНТИЧНОСТЬ И ЖИЗНЕННЫЙ ЦИКЛ ############################
+
+krm:assessmentStatus a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Assessment ; rdfs:range skos:Concept ;
+    rdfs:label "статус ассессмента"@ru , "assessment status"@en ;
+    rdfs:comment "Фаза кампании (SKOS krm:assessmentStatuses): постановка → генерация → проверка → готов → идёт → оценивание → закрыт."@ru ,
+        "Campaign phase (SKOS krm:assessmentStatuses): setup → generation → validation → ready → active → scoring → closed."@en .
+
+krm:windowStart a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Assessment ; rdfs:range xsd:dateTime ;
+    rdfs:label "начало окна проведения"@ru , "window start"@en ;
+    rdfs:comment "xsd:dateTime (а не xsd:date): xsd:date нет в карте типов данных OWL 2, DL-ризонеры (HermiT) его не поддерживают."@ru ,
+        "xsd:dateTime rather than xsd:date: xsd:date is not in the OWL 2 datatype map and is not supported by DL reasoners such as HermiT."@en .
+
+krm:windowEnd a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Assessment ; rdfs:range xsd:dateTime ;
+    rdfs:label "конец окна проведения"@ru , "window end"@en .
+
+# krm:inCycle (→ Cycle) и krm:underKRMVersion (→ KRMVersion) переиспользуются из process.ttl.
+
+############################ ГЛАВНАЯ МАТРИЦА: КОГОРТА И ОХВАТ ############################
+
+krm:coversProgram a owl:ObjectProperty ;
+    rdfs:domain krm:Assessment ; rdfs:range krm:EducationalProgram ;
+    rdfs:label "охватывает программу"@ru , "covers program"@en ;
+    rdfs:comment "Образовательные программы, участвующие в ассессменте (измерение «ОП» главной матрицы)."@ru ,
+        "Educational programs participating in the assessment (the program dimension of the main matrix)."@en .
+
+krm:coversUniversity a owl:ObjectProperty ;
+    owl:propertyChainAxiom ( krm:coversProgram krm:atUniversity ) ;
+    rdfs:domain krm:Assessment ; rdfs:range krm:University ;
+    rdfs:label "охватывает вуз"@ru , "covers university"@en ;
+    rdfs:comment "Выводится: ассессмент → программа → вуз (измерение «вузы» главной матрицы)."@ru ,
+        "Inferred: assessment → program → university (the university dimension of the main matrix)."@en .
+
+krm:enrolls a owl:ObjectProperty ;
+    rdfs:domain krm:Assessment ; rdfs:range krm:Student ;
+    rdfs:label "включает обучающегося"@ru , "enrolls student"@en ;
+    rdfs:comment "Обучающиеся, участвующие в ассессменте (измерение «студенты» главной матрицы; их КИУ — через назначенный профиль, см. krm:studentKIU)."@ru ,
+        "Students participating in the assessment (the student dimension of the main matrix; their CILs come from the assigned profile, see krm:studentKIU)."@en .
+
+krm:usesProfile a owl:ObjectProperty ;
+    rdfs:domain krm:Assessment ; rdfs:range krm:ProgramTestingProfile ;
+    rdfs:label "использует профиль тестирования"@ru , "uses testing profile"@en ;
+    rdfs:comment "Профили тестирования ОП, действующие в ассессменте; задают, по каким КИУ проверяются студенты программы."@ru ,
+        "Program testing profiles in force for the assessment; they fix which CILs a program's students are assessed on."@en .
+
+krm:hasDemand a owl:ObjectProperty ;
+    rdfs:domain krm:Assessment ; rdfs:range krm:KIUDemand ;
+    rdfs:label "имеет потребность по КИУ"@ru , "has CIL demand"@en ;
+    rdfs:comment "Рассчитанный спрос по КИУ для этого ассессмента — операционная форма главной матрицы (столбцы «студент × КИУ»: охват и требуемое число вариантов). По ней ведётся постановка заданий."@ru ,
+        "The computed per-CIL demand for this assessment — the operational form of the main matrix (the student × CIL columns: coverage and required variant counts). Task setup is driven by it."@en .
+
+krm:assessmentKIU a owl:ObjectProperty ;
+    owl:propertyChainAxiom ( krm:hasDemand krm:demandForKIU ) ;
+    rdfs:domain krm:Assessment ; rdfs:range krm:KIU ;
+    rdfs:label "КИУ ассессмента"@ru , "assessment CIL"@en ;
+    rdfs:comment "Выводится: ассессмент → потребность → КИУ (полный охват КИУ кампании, измерение «КИУ» главной матрицы)."@ru ,
+        "Inferred: assessment → demand → CIL (the full CIL scope of the campaign, the CIL dimension of the main matrix)."@en .
+
+############################ ОПЕРАЦИОННЫЕ СВЯЗИ (ПАНЕЛЬ АДМИНИСТРАТОРА) ############################
+
+krm:hasWorkItem a owl:ObjectProperty ;
+    rdfs:domain krm:Assessment ; rdfs:range krm:WorkItem ;
+    rdfs:label "имеет элемент очереди"@ru , "has work item"@en ;
+    rdfs:comment "Очередь генерации этого ассессмента. По статусам элементов (krm:workStatus) администратор видит ход заполнения/генерации и проверки; krm:WS_Error и непройденная валидация показывают ошибки; krm:targetKIU даёт распределение работ по КИУ."@ru ,
+        "The generation queue of this assessment. Item statuses (krm:workStatus) show the admin the filling/generation and checking progress; krm:WS_Error and failed validation surface errors; krm:targetKIU gives the work distribution by CIL."@en .
+
+krm:hasTestVariant a owl:ObjectProperty ;
+    rdfs:domain krm:Assessment ; rdfs:range krm:TestVariant ;
+    rdfs:label "имеет вариант теста"@ru , "has test variant"@en ;
+    rdfs:comment "Собранные в рамках ассессмента индивидуальные варианты теста (ВТ); дают распределение заданий по обучающимся."@ru ,
+        "The individual test variants (ВТ) assembled within the assessment; they give the task distribution across students."@en .
+
+############################ ПОЛИТИКА СБОРКИ ВАРИАНТА ТЕСТА ############################
+# Правила, по которым собирается ВТ, — ДАННЫЕ ассессмента, а не константы схемы. До этого они были
+# размазаны: доли — прозой в комментарии planning.ttl, «20–40 заданий / ≤180 мин» — константами в
+# SHACL (одинаковыми для всех), суммарная сложность и разбаловка — нигде. Теперь всё здесь: у
+# каждого ассессмента своя политика (ДС и ТОП ДС получают разные пороги без правки онтологии),
+# а шейпы и сборщик читают её ИЗ ГРАФА.
+
+krm:AssemblyPolicy a owl:Class ;
+    rdfs:label "Политика сборки варианта теста"@ru , "Test-variant assembly policy"@en ;
+    rdfs:comment "Спецификация допустимого варианта теста для данного ассессмента: диапазоны сумм по заданиям (число, время, сложность, разбаловка) и квоты долей по осям классификации — тип задания, контур проверки, практико-ориентированность, уровень освоения. По ней сборщик отбирает задания, а SHACL/SPARQL-гейт проверяет собранный ВТ."@ru ,
+        "The specification of an admissible test variant for a given assessment: ranges for the per-task sums (count, time, difficulty, score) and share quotas along the classification axes — task type, check contour, practice orientation, mastery level. The assembler selects tasks by it, and a SHACL/SPARQL gate validates the assembled test variant against it."@en .
+
+krm:hasPolicy a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Assessment ; rdfs:range krm:AssemblyPolicy ;
+    rdfs:label "политика сборки"@ru , "assembly policy"@en ;
+    rdfs:comment "Ровно одна политика сборки на ассессмент."@ru , "Exactly one assembly policy per assessment."@en .
+
+# --- Диапазоны сумм по включённым заданиям ---
+
+krm:minTaskCount a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:AssemblyPolicy ; rdfs:range xsd:integer ;
+    rdfs:label "минимум заданий в ВТ"@ru , "minimum task count"@en ;
+    rdfs:comment "Ориентир методики — 20 (меньше для ДС, больше для ТОП ДС)."@ru .
+krm:maxTaskCount a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:AssemblyPolicy ; rdfs:range xsd:integer ;
+    rdfs:label "максимум заданий в ВТ"@ru , "maximum task count"@en ;
+    rdfs:comment "Ориентир методики — 40."@ru .
+
+krm:minDuration a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:AssemblyPolicy ; rdfs:range xsd:integer ;
+    rdfs:label "минимум суммарного времени, мин"@ru , "minimum total duration, min"@en .
+krm:maxDuration a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:AssemblyPolicy ; rdfs:range xsd:integer ;
+    rdfs:label "максимум суммарного времени, мин"@ru , "maximum total duration, min"@en ;
+    rdfs:comment "Ориентир методики — 180 минут (сумма krm:estimatedMinutes по заданиям ВТ)."@ru .
+
+krm:minDifficultySum a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:AssemblyPolicy ; rdfs:range xsd:integer ;
+    rdfs:label "минимум суммарной сложности"@ru , "minimum total difficulty"@en ;
+    rdfs:comment "Сумма krm:difficulty по заданиям ВТ. Ось, независимая от времени и уровня освоения."@ru .
+krm:maxDifficultySum a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:AssemblyPolicy ; rdfs:range xsd:integer ;
+    rdfs:label "максимум суммарной сложности"@ru , "maximum total difficulty"@en .
+
+krm:minScoreSum a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:AssemblyPolicy ; rdfs:range xsd:decimal ;
+    rdfs:label "минимум суммарного балла"@ru , "minimum total score"@en ;
+    rdfs:comment "Разбаловка: сумма krm:maxScore по заданиям ВТ."@ru .
+krm:maxScoreSum a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:AssemblyPolicy ; rdfs:range xsd:decimal ;
+    rdfs:label "максимум суммарного балла"@ru , "maximum total score"@en .
+
+# --- Квоты долей по осям классификации ---
+
+krm:hasQuota a owl:ObjectProperty ;
+    rdfs:domain krm:AssemblyPolicy ; rdfs:range krm:Quota ;
+    rdfs:label "квота по типу задания"@ru , "has task-type quota"@en ;
+    rdfs:comment "Квоты долей по типам заданий (krm:TaskType). Отдельной оси «контур проверки» в квотах НЕ нужно: экспертной проверки требует ровно один тип (krm:TT_OpenText), поэтому правило «20% с экспертной проверкой / 80% автопроверяемых» — это квота maxShare 0,20 на krm:TT_OpenText. Аналогично форма: закрытые = TT_SingleChoice + TT_MultipleChoice."@ru ,
+        "Share quotas by task type (krm:TaskType). No separate 'check contour' axis is needed in quotas: exactly one type requires an expert check (krm:TT_OpenText), so the '20% expert-checked / 80% auto-checked' rule is a maxShare 0.20 quota on krm:TT_OpenText. Likewise for the form: closed = TT_SingleChoice + TT_MultipleChoice."@en .
+
+krm:Quota a owl:Class ;
+    rdfs:label "Квота доли по типу"@ru , "Task-type share quota"@en ;
+    rdfs:comment "Реификация «доля заданий данного типа в варианте теста — от … до …». Пример: krm:quotaOn krm:TT_OpenText ; krm:maxShare 0.2 — не более 20% открытых текстовых (они же единственные с экспертной проверкой)."@ru ,
+        "A reification of 'the share of tasks of a given type in a test variant is between … and …'. Example: krm:quotaOn krm:TT_OpenText ; krm:maxShare 0.2 — at most 20% open-text tasks (the only expert-checked ones)."@en .
+
+krm:quotaOn a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Quota ; rdfs:range krm:TaskType ;
+    rdfs:label "тип задания"@ru , "quota on task type"@en .
+
+krm:minShare a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Quota ; rdfs:range xsd:decimal ;
+    rdfs:label "минимальная доля"@ru , "minimum share"@en ;
+    rdfs:comment "Доля от числа заданий в ВТ, 0…1."@ru .
+krm:maxShare a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Quota ; rdfs:range xsd:decimal ;
+    rdfs:label "максимальная доля"@ru , "maximum share"@en .
+
+# --- Оси без справочника (булев признак и уровень освоения) — прямыми свойствами политики ---
+
+krm:minPracticeShare a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:AssemblyPolicy ; rdfs:range xsd:decimal ;
+    rdfs:label "минимальная доля практико-ориентированных"@ru , "minimum practice-oriented share"@en ;
+    rdfs:comment "Доля заданий с krm:practiceOriented = true (класс krm:PracticeOrientedTask). ОТДЕЛЬНАЯ ось: не выводится из типа задания. Ориентир методики — 60% практических / 40% теоретических."@ru ,
+        "The share of tasks with krm:practiceOriented = true (class krm:PracticeOrientedTask). A SEPARATE axis: not derived from the task type. Methodology guideline — 60% practical / 40% theoretical."@en .
+krm:maxPracticeShare a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:AssemblyPolicy ; rdfs:range xsd:decimal ;
+    rdfs:label "максимальная доля практико-ориентированных"@ru , "maximum practice-oriented share"@en .
+
+krm:minPriorLevelShare a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:AssemblyPolicy ; rdfs:range xsd:decimal ;
+    rdfs:label "минимальная доля заданий предшествующих уровней"@ru , "minimum prior-level share"@en ;
+    rdfs:comment "Доля заданий, чей уровень освоения (krm:taskLevel) ниже уровня, проверяемого у студента. Ориентир методики — 10–15%."@ru ,
+        "The share of tasks whose mastery level (krm:taskLevel) is below the level being assessed for the student. Methodology guideline — 10–15%."@en .
+krm:maxPriorLevelShare a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:AssemblyPolicy ; rdfs:range xsd:decimal ;
+    rdfs:label "максимальная доля заданий предшествующих уровней"@ru , "maximum prior-level share"@en .
+
+############################ СПРАВОЧНИК СТАТУСОВ АССЕССМЕНТА (SKOS) ############################
+
+krm:assessmentStatuses a skos:ConceptScheme ; rdfs:label "Статусы ассессмента"@ru , "Assessment statuses"@en .
+krm:AST_Setup      a skos:Concept ; skos:inScheme krm:assessmentStatuses ; skos:prefLabel "постановка (матрица)"@ru , "setup (matrix)"@en .
+krm:AST_Generation a skos:Concept ; skos:inScheme krm:assessmentStatuses ; skos:prefLabel "генерация заданий"@ru , "task generation"@en .
+krm:AST_Validation a skos:Concept ; skos:inScheme krm:assessmentStatuses ; skos:prefLabel "проверка"@ru , "validation"@en .
+krm:AST_Ready      a skos:Concept ; skos:inScheme krm:assessmentStatuses ; skos:prefLabel "готов к проведению"@ru , "ready"@en .
+krm:AST_Active     a skos:Concept ; skos:inScheme krm:assessmentStatuses ; skos:prefLabel "идёт"@ru , "active"@en .
+krm:AST_Scoring    a skos:Concept ; skos:inScheme krm:assessmentStatuses ; skos:prefLabel "оценивание"@ru , "scoring"@en .
+krm:AST_Closed     a skos:Concept ; skos:inScheme krm:assessmentStatuses ; skos:prefLabel "закрыт"@ru , "closed"@en .
+
+############################ КЛЮЧ ############################
+
+krm:Assessment     owl:hasKey ( krm:code ) .
+krm:AssemblyPolicy owl:hasKey ( krm:code ) .

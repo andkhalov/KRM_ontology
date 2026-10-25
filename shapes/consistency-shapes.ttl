@@ -1,0 +1,163 @@
+# consistency-shapes.ttl — НЕОБХОДИМЫЕ УСЛОВИЯ КОНСИСТЕНТНОСТИ АССЕССМЕНТА.
+# Не входит в owl:imports зонтика (валидация, не схема).
+#
+# ЧТО ТАКОЕ КОНСИСТЕНТНЫЙ АССЕССМЕНТ (определение):
+#   ассессмент консистентен ⇔ для КАЖДОГО зачисленного студента СУЩЕСТВУЕТ хотя бы один допустимый
+#   вариант теста (покрывает его КИУ, укладывается в бюджет и квоты политики, использует только
+#   заявленные вузом ИПД/ПЗ), и наборы разных студентов не совпадают.
+#
+# ЭТО СВОЙСТВО ПЛАНА, А НЕ СОБРАННЫХ ВТ. Полная проверка — вопрос о СУЩЕСТВОВАНИИ допустимой
+# сборки для каждого студента: многомерный рюкзак с покрытием и квотами, NP-трудный. SHACL его
+# не выразит и выражать не должен. Поэтому здесь — только НЕОБХОДИМЫЕ условия: их нарушение
+# ДОКАЗЫВАЕТ, что консистентного ассессмента не существует, и обнаруживается ДО того, как написана
+# хоть одна задача. Достаточность гарантируется конструктивно — сметой (внешний планировщик).
+#
+# Все проверки — Violation: это не «не готово», а «так не соберётся никогда».
+
+@prefix krm:  <http://example.org/krm#> .
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/krm/shapes/consistency> a owl:Ontology ;
+    sh:declare [ sh:prefix "krm" ; sh:namespace "http://example.org/krm#"^^xsd:anyURI ] ,
+               [ sh:prefix "xsd" ; sh:namespace "http://www.w3.org/2001/XMLSchema#"^^xsd:anyURI ] .
+
+############################ 1. ПОЛИТИКА ВНУТРЕННЕ НЕПРОТИВОРЕЧИВА ############################
+# Политику пишет человек, и она может быть невыполнима сама по себе — независимо от банка заданий.
+# Такую ошибку надо ловить в момент постановки ассессмента, а не когда не собрался первый ВТ.
+
+# Штатный sh:lessThanOrEquals (не SPARQL): в SPARQL-констрейнтах SHACL запрещает VALUES —
+# через него движок пробрасывает $this.
+krm:PolicyRangeShape a sh:NodeShape ;
+    sh:targetClass krm:AssemblyPolicy ;
+    sh:property [ sh:path krm:minTaskCount ; sh:lessThanOrEquals krm:maxTaskCount ;
+                  sh:message "Политика противоречива: минимум заданий больше максимума."@ru ] ;
+    sh:property [ sh:path krm:minDuration ; sh:lessThanOrEquals krm:maxDuration ;
+                  sh:message "Политика противоречива: минимум суммарного времени больше максимума."@ru ] ;
+    sh:property [ sh:path krm:minDifficultySum ; sh:lessThanOrEquals krm:maxDifficultySum ;
+                  sh:message "Политика противоречива: минимум суммарной сложности больше максимума."@ru ] ;
+    sh:property [ sh:path krm:minScoreSum ; sh:lessThanOrEquals krm:maxScoreSum ;
+                  sh:message "Политика противоречива: минимум суммарного балла больше максимума."@ru ] ;
+    sh:property [ sh:path krm:minPracticeShare ; sh:lessThanOrEquals krm:maxPracticeShare ;
+                  sh:message "Политика противоречива: минимум доли практико-ориентированных больше максимума."@ru ] ;
+    sh:property [ sh:path krm:minPriorLevelShare ; sh:lessThanOrEquals krm:maxPriorLevelShare ;
+                  sh:message "Политика противоречива: минимум доли заданий предшествующих уровней больше максимума."@ru ] .
+
+# Доли — это доли ОДНОГО И ТОГО ЖЕ множества заданий, а тип у задания ровно один (krm:taskType
+# функциональное). Значит доли по четырём типам в сумме дают РОВНО 1. Отсюда два необходимых
+# условия выполнимости квот, которые видно, не заглядывая в банк.
+krm:PolicyQuotaSumShape a sh:NodeShape ;
+    sh:targetClass krm:AssemblyPolicy ;
+    sh:sparql [
+        sh:message "Сумма минимальных долей по типам = {?sum} > 1. Доли типов в сумме дают ровно 1 (тип у задания один) — политика невыполнима ни при каком банке заданий."@ru ;
+        sh:select """
+            SELECT $this ?sum WHERE {
+                { SELECT $this (SUM(?mn) AS ?sum) WHERE {
+                    $this krm:hasQuota ?q . ?q krm:minShare ?mn .
+                  } GROUP BY $this }
+                FILTER (?sum > 1)
+            }""" ] ;
+    sh:sparql [
+        sh:message "Квоты заданы для всех четырёх типов, но сумма максимальных долей = {?sum} < 1 — заполнить вариант теста нечем."@ru ;
+        sh:select """
+            SELECT $this ?sum ?cnt WHERE {
+                { SELECT $this (SUM(?mx) AS ?sum) (COUNT(?q) AS ?cnt) WHERE {
+                    $this krm:hasQuota ?q . ?q krm:maxShare ?mx .
+                  } GROUP BY $this }
+                FILTER (?cnt = 4 && ?sum < 1)
+            }""" ] .
+
+krm:QuotaShape a sh:NodeShape ;
+    sh:targetClass krm:Quota ;
+    sh:property [ sh:path krm:minShare ; sh:datatype xsd:decimal ; sh:minInclusive 0 ; sh:maxInclusive 1 ;
+                  sh:message "Доля должна лежать в [0; 1]."@ru ] ;
+    sh:property [ sh:path krm:maxShare ; sh:datatype xsd:decimal ; sh:minInclusive 0 ; sh:maxInclusive 1 ;
+                  sh:message "Доля должна лежать в [0; 1]."@ru ] ;
+    sh:property [ sh:path krm:quotaOn ; sh:minCount 1 ; sh:maxCount 1 ; sh:class krm:TaskType ;
+                  sh:message "Квота задаётся на один тип задания."@ru ] ;
+    sh:property [ sh:path krm:minShare ; sh:lessThanOrEquals krm:maxShare ;
+                  sh:message "Квота противоречива: минимальная доля больше максимальной."@ru ] .
+
+############################ 2. ПОКРЫТИЕ ФИЗИЧЕСКИ ВОЗМОЖНО ############################
+# Каждое задание покрывает РОВНО ОДИН КИУ (цепочка forDescriptor → specializes → fromKIU —
+# все три свойства функциональны). Значит вариант теста из n заданий покрывает не более n КИУ.
+# Если студенту назначено больше КИУ, чем политика разрешает заданий, — покрытие невозможно
+# в принципе. Это доказательство неконсистентности, а не предупреждение.
+
+krm:CoverageFeasibilityShape a sh:NodeShape ;
+    sh:targetClass krm:Student ;
+    sh:sparql [
+        sh:message "Студенту назначено {?n} КИУ, а политика сборки разрешает не более {?max} заданий в варианте теста. Каждое задание покрывает ровно один КИУ — покрыть назначенные КИУ невозможно ни при каком банке. Ассессмент неконсистентен."@ru ;
+        sh:select """
+            SELECT $this ?n ?max WHERE {
+                ?a krm:enrolls $this .
+                ?a krm:hasPolicy ?p .
+                ?p krm:maxTaskCount ?max .
+                { SELECT $this (COUNT(DISTINCT ?k) AS ?n) WHERE {
+                    $this krm:hasTestingProfile ?prof .
+                    ?prof krm:hasEntry ?e .
+                    ?e krm:forKIU ?k .
+                  } GROUP BY $this }
+                FILTER (?n > ?max)
+            }""" ] .
+
+############################ 3. СМЕТА ПОКРЫВАЕТ СПРОС ############################
+# Спрос (krm:KIUDemand) говорит, сколько вариантов нужно по КИУ. Смета обязана столько
+# ЗАПЛАНИРОВАТЬ (каркасы считаются наравне с написанными — в этом и смысл сметы: дефицит виден
+# до написания). Severity Warning: по ходу наполнения дефицит — норма, к готовности — нет.
+
+krm:DemandCoveredByPlanShape a sh:NodeShape ;
+    sh:targetClass krm:KIUDemand ;
+    sh:severity sh:Warning ;
+    sh:sparql [
+        sh:message "По КИУ {?kiu} требуется {?req} вариантов, а запланировано (включая ненаписанные каркасы) {?have}. Дефицит сметы."@ru ;
+        sh:select """
+            SELECT $this ?kiu ?req ?have WHERE {
+                $this krm:demandForKIU ?kiu .
+                $this krm:requiredVariants ?req .
+                {
+                  SELECT $this (COUNT(DISTINCT ?v) AS ?have) WHERE {
+                    $this krm:demandForKIU ?k .
+                    ?v krm:ofTemplate/krm:forDescriptor/krm:specializes/krm:fromKIU ?k .
+                  } GROUP BY $this
+                }
+                FILTER (?have < ?req)
+            }""" ] .
+
+############################ 4. БЮДЖЕТ ВРЕМЕНИ НЕ ВЛЕЗАЕТ В ПОКРЫТИЕ ############################
+# Необходимое условие выполнимости (условие N4):
+#   допустимый ВТ обязан содержать хотя бы одно задание по КАЖДОМУ назначенному КИУ, и эти задания
+#   различны (разные КИУ ⇒ разные задания). Значит суммарное время ВТ не меньше, чем сумма
+#   МИНИМАЛЬНЫХ времён по назначенным КИУ. Если эта нижняя оценка уже превышает maxDuration —
+#   покрытие не влезает в бюджет НИ ПРИ КАКОЙ сборке.
+#
+# Работает и по СМЕТЕ (каркасам): у каркаса estimatedMinutes уже проставлен, содержимое не нужно.
+# Именно так дефицит бюджета обнаруживается ДО написания единственной задачи.
+# Оценка берётся по всем заданиям КИУ без фильтра по ИПД/ПЗ — она от этого только ослабевает
+# (минимум по большему множеству меньше), значит условие остаётся НЕОБХОДИМЫМ.
+
+krm:BudgetFeasibilityShape a sh:NodeShape ;
+    sh:targetClass krm:Student ;
+    sh:sparql [
+        sh:message "Даже самые короткие задания по назначенным студенту КИУ дают в сумме {?lower} мин, а политика разрешает не более {?max}. Покрыть КИУ в рамках бюджета времени невозможно ни при какой сборке — ассессмент неконсистентен."@ru ;
+        sh:select """
+            SELECT $this ?lower ?max WHERE {
+                ?a krm:enrolls $this .
+                ?a krm:hasPolicy ?p .
+                ?p krm:maxDuration ?max .
+                {
+                  SELECT $this (SUM(?tmin) AS ?lower) WHERE {
+                    {
+                      SELECT $this ?k (MIN(?t) AS ?tmin) WHERE {
+                        $this krm:hasTestingProfile ?prof .
+                        ?prof krm:hasEntry ?e .
+                        ?e krm:forKIU ?k .
+                        ?task krm:forDescriptor/krm:specializes/krm:fromKIU ?k .
+                        ?task krm:estimatedMinutes ?t .
+                      } GROUP BY $this ?k
+                    }
+                  } GROUP BY $this
+                }
+                FILTER (?lower > ?max)
+            }""" ] .

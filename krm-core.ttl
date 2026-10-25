@@ -1,0 +1,350 @@
+# krm-core.ttl — T-Box модуля КРМ и КИУ.
+# Проектные решения: keyed IRI (код = канонический ключ), SKOS для уровней,
+# реификация n-арной связи «роль требует компетенцию на уровне», гранулярные
+# темы/источники/кейсы, минимум OWL (близко к OWL 2 RL); ограничения данных — в SHACL.
+# Опубликованные сущности неизменяемы в рамках версии КРМ (правка → новый IRI + версия).
+# Аннотации двуязычные (ru/en); для SKOS основной веб-лейбл — русский (skos:prefLabel@ru).
+
+@prefix krm:  <http://example.org/krm#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix dct:  <http://purl.org/dc/terms/> .
+
+<http://example.org/krm> a owl:Ontology ;
+    dct:title "Онтология КРМ и КИУ (krm-core)"@ru , "KRM and CIL ontology (krm-core)"@en ;
+    rdfs:label "Онтология КРМ и КИУ (krm-core)"@ru , "KRM and CIL ontology (krm-core)"@en ;
+    owl:versionInfo "1.0.0 ; КРМ 2.0 (декабрь 2025)" ;
+    dct:description "Содержательный слой системы оценивания: домен → блок → (направление) → компетенция → индикатор → уровень → КИУ; профессиональные роли как ортогональный классификатор. Самостоятельная изолированная онтология. Целевой профиль — OWL 2 DL (классификация DL-ризонером: модуль definitions); ограничения данных — в SHACL. Это ядро близко к OWL 2 RL и может использоваться отдельно для масштабной материализации."@ru ,
+        "Content layer of the competency-assessment system: domain → block → (direction) → competence → indicator → level → CIL; professional roles as an orthogonal classifier. A standalone, isolated ontology. Target profile is OWL 2 DL (classification by a DL reasoner: the definitions module); data constraints are in SHACL. This core stays close to OWL 2 RL and can be used alone for large-scale materialization."@en .
+
+############################ КЛАССЫ: содержательная спина ############################
+
+krm:Domain a owl:Class ; rdfs:subClassOf skos:Concept ;
+    rdfs:label "Домен (тип компетенции)"@ru , "Domain (competence type)"@en ;
+    rdfs:comment "Верхний уровень классификации компетенции в КРМ — тип компетенции. Контролируемый справочник из четырёх значений (см. krm:domains). Наследуется вниз по каскаду до КИУ."@ru ,
+        "Top-level classification of a competence in the KRM — the competence type. A controlled vocabulary of four values (see krm:domains). Inherited down the cascade to the CIL."@en .
+
+# Справочник типов компетенций (доменов) — фиксированный, двуязычный.
+krm:domains a skos:ConceptScheme ;
+    rdfs:label "Типы компетенций (домены)"@ru , "Competence types (domains)"@en ;
+    dct:title "Типы компетенций (домены)"@ru , "Competence types (domains)"@en .
+
+krm:Domain_Professional a krm:Domain ; skos:inScheme krm:domains ; skos:notation "PROF" ;
+    skos:prefLabel "профессиональные компетенции"@ru , "professional competencies"@en .
+krm:Domain_Advanced a krm:Domain ; skos:inScheme krm:domains ; skos:notation "ADV" ;
+    skos:prefLabel "опережающие профессиональные компетенции"@ru , "advanced professional competencies"@en .
+krm:Domain_Universal a krm:Domain ; skos:inScheme krm:domains ; skos:notation "UNIV" ;
+    skos:prefLabel "универсальные (надпрофессиональные) компетенции"@ru , "universal (supra-professional) competencies"@en .
+krm:Domain_Industry a krm:Domain ; skos:inScheme krm:domains ; skos:notation "IND" ;
+    skos:prefLabel "отраслевые компетенции"@ru , "industry-specific competencies"@en .
+
+krm:Block a owl:Class ; rdfs:subClassOf skos:Concept ;
+    rdfs:label "Блок (область)"@ru , "Block (area)"@en ;
+    rdfs:comment "Тематическая область внутри домена; средний уровень группировки компетенций. Каждая компетенция принадлежит ровно одному блоку. SKOS-справочник (krm:blocks); конкретные блоки наполняются из данных КРМ загрузчиком."@ru ,
+        "Thematic area within a domain; a mid-level grouping of competences. Each competence belongs to exactly one block. A SKOS vocabulary (krm:blocks); specific blocks are populated from KRM data by the loader."@en .
+
+krm:blocks a skos:ConceptScheme ; rdfs:label "Блоки (области)"@ru , "Blocks (areas)"@en .
+
+krm:Direction a owl:Class ; rdfs:subClassOf skos:Concept ;
+    rdfs:label "Направление компетенции"@ru , "Competence direction"@en ;
+    rdfs:comment "Тематическое направление компетенции, более дробная рубрика, чем блок. Связь с компетенцией — многие-ко-многим. SKOS-справочник (krm:directions); наполняется из данных КРМ загрузчиком."@ru ,
+        "A thematic direction of a competence, finer-grained than a block. Many-to-many relation with competence. A SKOS vocabulary (krm:directions); populated from KRM data by the loader."@en .
+
+krm:directions a skos:ConceptScheme ; rdfs:label "Направления компетенций"@ru , "Competence directions"@en .
+
+krm:Competence a owl:Class ; rdfs:subClassOf skos:Concept ;
+    rdfs:label "Компетенция"@ru , "Competence"@en ;
+    rdfs:comment "Совокупность знаний, умений и навыков с кодом и формулировкой (например, MF-1). Узел дерева КРМ: родитель — блок (krm:inBlock ⊑ krm:broader), дети — индикаторы. Направление — сквозная рубрика, НЕ родитель."@ru ,
+        "A body of knowledge, skills and abilities with a code and a statement (e.g. MF-1). A node of the KRM tree: its parent is a block (krm:inBlock ⊑ krm:broader), its children are indicators. A direction is a cross-cutting rubric, NOT a parent."@en .
+
+krm:Indicator a owl:Class ; rdfs:subClassOf skos:Concept ;
+    rdfs:label "Индикатор компетенции"@ru , "Competence indicator"@en ;
+    rdfs:comment "Конкретное наблюдаемое проявление компетенции (например, MF-1.1). Узел дерева КРМ: родитель — компетенция (krm:indicatorOf ⊑ krm:broader), дети — КИУ по уровням освоения."@ru ,
+        "A concrete observable manifestation of a competence (e.g. MF-1.1). A node of the KRM tree: its parent is a competence (krm:indicatorOf ⊑ krm:broader), its children are the CILs across mastery levels."@en .
+
+krm:KIU a owl:Class ; rdfs:subClassOf skos:Concept ;
+    rdfs:label "КИУ (компетенция·индикатор·уровень)"@ru , "CIL (competence·indicator·level)"@en ;
+    skos:altLabel "Структурная единица компетенции"@ru ;
+    rdfs:comment "Атомарная единица декомпозированной КРМ — связка «компетенция–индикатор–уровень освоения (с учётом возможной вариации)». ЛИСТ дерева КРМ: родитель — индикатор (krm:hasIndicator ⊑ krm:broader); уровень освоения — ФАСЕТ, а не родитель (КИУ не «уже» уровня Б). Верхняя граница того, что задаёт КРМ; единица выбора вузом и точка входа каскада разработки ФОС. Неизменяема в рамках версии КРМ: правка порождает новый IRI и версию."@ru ,
+        "Atomic unit of the decomposed KRM — the tuple competence–indicator–mastery-level (with optional variation). A LEAF of the KRM tree: its parent is an indicator (krm:hasIndicator ⊑ krm:broader); the mastery level is a FACET, not a parent (a CIL is not 'narrower than' level B). The upper boundary of what the KRM defines; the unit selected by a university and the entry point of the assessment-materials (FOS) cascade. Immutable within a KRM version: an edit mints a new IRI and version."@en .
+
+############################ ДЕРЕВО КРМ: ОДНО ОТНОШЕНИЕ, А НЕ ЧЕТЫРЕ ############################
+# Спина КРМ — это ТАКСОНОМИЯ, и теперь она выражена как таксономия: все её узлы — skos:Concept,
+# а «вверх по дереву» — ОДНО отношение krm:broader (⊑ skos:broader). Четыре типизированных свойства
+# (inDomain, inBlock, indicatorOf, hasIndicator) стали его подсвойствами: они сохраняют домены,
+# ранги и функциональность (у каждого узла ровно один родитель), но теперь ещё и складываются
+# в единое дерево.
+#
+# ЗАЧЕМ. Раньше «вверх» было четыре разных свойства, и пути от КИУ до домена не существовало как
+# ребра — его приходилось собирать тремя цепочками-костылями (kiuCompetence/kiuBlock/kiuDomain).
+# Дерево КРМ нельзя было ни обойти, ни нарисовать одним запросом. Теперь можно:
+#     ?x krm:broaderTransitive ?ancestor            — все предки узла
+#     ?d skos:topConceptOf krm:krmTree              — корни (домены)
+# Три цепочки удалены как избыточные.
+#
+# ЧТО НЕ ЯВЛЯЕТСЯ РЕБРОМ ДЕРЕВА (важно):
+#   krm:hasDirection — направление: сквозная рубрика, M:N. Будь оно broader, у компетенции стало бы
+#                      два родителя (блок и направление) — дерево превратилось бы в решётку.
+#   krm:hasLevel     — уровень освоения: ФАСЕТ. КИУ не «уже» уровня Б; уровень — это измерение,
+#                      по которому индикатор развёрнут в КИУ, а не предок.
+
+krm:krmTree a skos:ConceptScheme ;
+    rdfs:label "Дерево КРМ (спина)"@ru , "KRM tree (spine)"@en ;
+    dct:title "Дерево КРМ: домен → блок → компетенция → индикатор → КИУ"@ru ,
+        "KRM tree: domain → block → competence → indicator → CIL"@en ;
+    skos:hasTopConcept krm:Domain_Professional , krm:Domain_Advanced ,
+                       krm:Domain_Universal , krm:Domain_Industry ;
+    rdfs:comment "Единая таксономия содержательной спины КРМ. Корни — четыре домена; принадлежность дереву = достижимость по krm:broaderTransitive до топ-концепта. Направления и уровни в дерево НЕ входят — это ортогональные фасеты."@ru ,
+        "The single taxonomy of the KRM content spine. The roots are the four domains; membership in the tree = reachability via krm:broaderTransitive to a top concept. Directions and mastery levels are NOT part of the tree — they are orthogonal facets."@en .
+
+krm:Domain_Professional skos:topConceptOf krm:krmTree .
+krm:Domain_Advanced     skos:topConceptOf krm:krmTree .
+krm:Domain_Universal    skos:topConceptOf krm:krmTree .
+krm:Domain_Industry     skos:topConceptOf krm:krmTree .
+
+krm:broader a owl:ObjectProperty ; rdfs:subPropertyOf skos:broader ;
+    rdfs:label "родитель в дереве КРМ"@ru , "broader in the KRM tree"@en ;
+    rdfs:comment "Единственное отношение «вверх» по дереву КРМ. Надсвойство четырёх типизированных рёбер: inDomain, inBlock, indicatorOf, hasIndicator. НЕ транзитивно (как и skos:broader) — транзитивное замыкание даёт krm:broaderTransitive."@ru ,
+        "The single 'upward' relation of the KRM tree. Super-property of the four typed edges: inDomain, inBlock, indicatorOf, hasIndicator. NOT transitive (as skos:broader is not) — the transitive closure is krm:broaderTransitive."@en .
+
+krm:broaderTransitive a owl:ObjectProperty , owl:TransitiveProperty ;
+    rdfs:subPropertyOf skos:broaderTransitive ;
+    rdfs:label "предок в дереве КРМ"@ru , "ancestor in the KRM tree"@en ;
+    rdfs:comment "Транзитивное замыкание krm:broader: все предки узла вплоть до домена. Заменяет прежние цепочки kiuCompetence/kiuBlock/kiuDomain — путь КИУ → домен теперь есть в графе как ребро, а не собирается тремя частными правилами. RL-безопасно (правило prp-trp)."@ru ,
+        "The transitive closure of krm:broader: all ancestors of a node up to its domain. Replaces the former kiuCompetence/kiuBlock/kiuDomain chains — the CIL → domain path is now an edge in the graph rather than three ad-hoc rules. RL-safe (rule prp-trp)."@en .
+
+krm:broader rdfs:subPropertyOf krm:broaderTransitive .
+
+krm:narrower a owl:ObjectProperty ; owl:inverseOf krm:broader ;
+    rdfs:subPropertyOf skos:narrower ;
+    rdfs:label "потомок в дереве КРМ"@ru , "narrower in the KRM tree"@en ;
+    rdfs:comment "Обратное к krm:broader — навигация вниз по дереву. Заменяет прежние типизированные инверсии hasBlock/hasCompetence/competenceHasIndicator/indicatorHasKIU."@ru ,
+        "The inverse of krm:broader — downward navigation. Replaces the former typed inverses hasBlock/hasCompetence/competenceHasIndicator/indicatorHasKIU."@en .
+
+krm:narrowerTransitive a owl:ObjectProperty , owl:TransitiveProperty ;
+    owl:inverseOf krm:broaderTransitive ; rdfs:subPropertyOf skos:narrowerTransitive ;
+    rdfs:label "все потомки в дереве КРМ"@ru , "all descendants in the KRM tree"@en .
+
+krm:narrower rdfs:subPropertyOf krm:narrowerTransitive .
+
+############################ УРОВЕНЬ: SKOS-справочник ############################
+
+krm:MasteryLevel a owl:Class ; rdfs:subClassOf skos:Concept ;
+    rdfs:label "Уровень освоения"@ru , "Mastery level"@en ;
+    rdfs:comment "Степень сформированности индикатора. Актуальная шкала — три уровня: базовый (Б), средний (С), продвинутый (П). Оформлен как SKOS-справочник; основной веб-лейбл — русский, латинские Б≡B/С≡S/П≡P — транслитерация (skos:altLabel)."@ru ,
+        "The degree to which an indicator is formed. Current scale: three levels — basic (Б/B), intermediate (С/S), advanced (П/P). Modelled as a SKOS vocabulary; primary web label is Russian, the Latin B/S/P are transliterations (skos:altLabel)."@en .
+
+krm:levels a skos:ConceptScheme ;
+    rdfs:label "Уровни освоения индикатора (Б/С/П)"@ru , "Indicator mastery levels (B/S/P)"@en ;
+    dct:title "Уровни освоения индикатора"@ru , "Indicator mastery levels"@en .
+
+# Уровни УПОРЯДОЧЕНЫ: Б < С < П. Порядок нужен, чтобы говорить «предшествующий уровень» —
+# без него квота «10–15% заданий предшествующих уровней» невыразима (сравнивать нечем).
+# ВНИМАНИЕ: ранг — это порядок ТРЕБОВАНИЯ ОП, а НЕ сложность задания (krm:difficulty):
+# на базовом уровне бывают трудные задания, на продвинутом — лёгкие.
+krm:levelRank a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:MasteryLevel ; rdfs:range xsd:integer ;
+    rdfs:label "ранг уровня"@ru , "level rank"@en ;
+    rdfs:comment "Порядковый номер уровня освоения: 1 = базовый, 2 = средний, 3 = продвинутый. Задаёт отношение «ниже/выше» для правила о заданиях предшествующих уровней. Не путать со сложностью задания и с весом уровня при рекомпозиции (krm:levelWeight)."@ru ,
+        "The ordinal of a mastery level: 1 = basic, 2 = intermediate, 3 = advanced. Defines the 'lower/higher' relation for the prior-level task rule. Not to be confused with a task's difficulty, nor with the level's recomposition weight (krm:levelWeight)."@en .
+
+krm:Level_B a krm:MasteryLevel ; skos:inScheme krm:levels ; krm:levelRank 1 ;
+    skos:notation "Б" ; skos:prefLabel "базовый"@ru , "basic"@en ; skos:altLabel "B" ;
+    skos:definition "Базовый уровень сформированности индикатора."@ru , "Basic mastery level of an indicator."@en .
+krm:Level_S a krm:MasteryLevel ; skos:inScheme krm:levels ; krm:levelRank 2 ;
+    skos:notation "С" ; skos:prefLabel "средний"@ru , "intermediate"@en ; skos:altLabel "S" ;
+    skos:definition "Средний уровень сформированности индикатора."@ru , "Intermediate mastery level of an indicator."@en .
+krm:Level_P a krm:MasteryLevel ; skos:inScheme krm:levels ; krm:levelRank 3 ;
+    skos:notation "П" ; skos:prefLabel "продвинутый"@ru , "advanced"@en ; skos:altLabel "P" ;
+    skos:definition "Продвинутый уровень сформированности индикатора."@ru , "Advanced mastery level of an indicator."@en .
+
+############################ РОЛИ ############################
+
+krm:Role a owl:Class ;
+    rdfs:label "Профессиональная роль"@ru , "Professional role"@en ;
+    rdfs:comment "Профессиональная позиция, с которой соотнесён набор компетенций (через требования роли). Ортогональна содержательной спине КРМ."@ru ,
+        "A professional position associated with a set of competences (via role requirements). Orthogonal to the KRM content spine."@en .
+
+krm:RoleRequirement a owl:Class ;
+    rdfs:label "Требование роли"@ru , "Role requirement"@en ;
+    rdfs:comment "Реификация n-арной связи «роль требует компетенцию на определённом уровне». Несёт требуемый уровень. Паттерн «связь-как-класс» (W3C n-ary relations / PROV qualification), поскольку OWL не выражает атрибутивные связи нативно."@ru ,
+        "Reification of the n-ary relation 'a role requires a competence at a given level'. Carries the required level. The relation-as-class pattern (W3C n-ary relations / PROV qualification), since OWL cannot express attributed relations natively."@en .
+
+############################ ГРАНУЛЯРНЫЕ УЗЛЫ СПИСКОВ ############################
+
+krm:Topic a owl:Class ;
+    rdfs:label "Тема / ключевое слово"@ru , "Topic / keyword"@en ;
+    rdfs:comment "Рекомендуемая тема или ключевое слово, привязанное к КИУ. Гранулярный объект (распарсенная ячейка-список КРМ), переиспользуемый несколькими КИУ."@ru ,
+        "A recommended topic or keyword linked to a CIL. A granular object (a parsed list cell from the KRM) reusable across several CILs."@en .
+
+krm:Source a owl:Class ;
+    rdfs:label "Источник информации"@ru , "Information source"@en ;
+    rdfs:comment "Источник или материал, привязанный к КИУ (библиографическая ссылка и т. п.). Гранулярный объект для провенанса и трассируемости к первоисточникам."@ru ,
+        "An information source or material linked to a CIL (a bibliographic reference, etc.). A granular object for provenance and traceability to primary sources."@en .
+
+krm:CaseExample a owl:Class ;
+    rdfs:label "Пример кейса"@ru , "Case example"@en ;
+    rdfs:comment "Пример кейса или задачи, заложенный в КРМ для КИУ. Гранулярный объект, заготовка для разработки заданий."@ru ,
+        "A case or task example provided in the KRM for a CIL. A granular object, a seed for task development."@en .
+
+############################ ОБЪЕКТНЫЕ СВОЙСТВА: спина ############################
+
+krm:inDomain a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:subPropertyOf krm:broader ;
+    rdfs:domain krm:Block ; rdfs:range krm:Domain ;
+    rdfs:label "в домене"@ru , "in domain"@en ;
+    rdfs:comment "Связывает блок с доменом, которому он принадлежит. Функциональное (ровно один домен)."@ru ,
+        "Links a block to the domain it belongs to. Functional (exactly one domain)."@en .
+
+krm:inBlock a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:subPropertyOf krm:broader ;
+    rdfs:domain krm:Competence ; rdfs:range krm:Block ;
+    rdfs:label "в блоке"@ru , "in block"@en ;
+    rdfs:comment "Связывает компетенцию с её блоком. Функциональное (ровно один блок)."@ru ,
+        "Links a competence to its block. Functional (exactly one block)."@en .
+
+krm:hasDirection a owl:ObjectProperty ;
+    rdfs:domain krm:Competence ; rdfs:range krm:Direction ;
+    rdfs:label "имеет направление"@ru , "has direction"@en ;
+    rdfs:comment "Связывает компетенцию с направлением(-ями). Многие-ко-многим. ВНИМАНИЕ: это СКВОЗНАЯ РУБРИКА, а НЕ ребро дерева КРМ — родитель компетенции ровно один (блок). Будь hasDirection подсвойством krm:broader, у компетенции стало бы два родителя и дерево выродилось бы в решётку."@ru ,
+        "Links a competence to its direction(s). Many-to-many. NOTE: this is a CROSS-CUTTING RUBRIC, NOT a KRM-tree edge — a competence has exactly one parent (its block). If hasDirection were a sub-property of krm:broader, a competence would get two parents and the tree would degenerate into a lattice."@en .
+
+krm:indicatorOf a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:subPropertyOf krm:broader ;
+    rdfs:domain krm:Indicator ; rdfs:range krm:Competence ;
+    rdfs:label "индикатор компетенции"@ru , "indicator of"@en ;
+    rdfs:comment "Связывает индикатор с его компетенцией. Функциональное (ровно одна компетенция)."@ru ,
+        "Links an indicator to its competence. Functional (exactly one competence)."@en .
+
+krm:hasIndicator a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:subPropertyOf krm:broader ;
+    rdfs:domain krm:KIU ; rdfs:range krm:Indicator ;
+    rdfs:label "имеет индикатор"@ru , "has indicator"@en ;
+    rdfs:comment "Связывает КИУ с его индикатором. Функциональное."@ru ,
+        "Links a CIL to its indicator. Functional."@en .
+
+krm:hasLevel a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:KIU ; rdfs:range krm:MasteryLevel ;
+    rdfs:label "имеет уровень"@ru , "has level"@en ;
+    rdfs:comment "Связывает КИУ с уровнем освоения. Функциональное."@ru ,
+        "Links a CIL to its mastery level. Functional."@en .
+
+############################ ОБЪЕКТНЫЕ СВОЙСТВА: КИУ → списки ############################
+
+krm:hasTopic a owl:ObjectProperty ;
+    rdfs:domain krm:KIU ; rdfs:range krm:Topic ;
+    rdfs:label "тема"@ru , "has topic"@en ;
+    rdfs:comment "Связывает КИУ с рекомендованной темой/ключевым словом."@ru ,
+        "Links a CIL to a recommended topic/keyword."@en .
+
+krm:hasSource a owl:ObjectProperty ;
+    rdfs:domain krm:KIU ; rdfs:range krm:Source ;
+    rdfs:label "источник"@ru , "has source"@en ;
+    rdfs:comment "Связывает КИУ с источником информации."@ru ,
+        "Links a CIL to an information source."@en .
+
+krm:hasCase a owl:ObjectProperty ;
+    rdfs:domain krm:KIU ; rdfs:range krm:CaseExample ;
+    rdfs:label "пример кейса"@ru , "has case"@en ;
+    rdfs:comment "Связывает КИУ с примером кейса."@ru ,
+        "Links a CIL to a case example."@en .
+
+############################ ОБЪЕКТНЫЕ СВОЙСТВА: роль-требование ############################
+
+krm:forRole a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:RoleRequirement ; rdfs:range krm:Role ;
+    rdfs:label "для роли"@ru , "for role"@en ;
+    rdfs:comment "Роль, к которой относится требование. Функциональное."@ru ,
+        "The role the requirement applies to. Functional."@en .
+
+krm:onCompetence a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:RoleRequirement ; rdfs:range krm:Competence ;
+    rdfs:label "на компетенцию"@ru , "on competence"@en ;
+    rdfs:comment "Компетенция, которую требует роль. Функциональное."@ru ,
+        "The competence required by the role. Functional."@en .
+
+krm:requiredLevel a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:RoleRequirement ; rdfs:range krm:MasteryLevel ;
+    rdfs:label "требуемый уровень"@ru , "required level"@en ;
+    rdfs:comment "Уровень освоения, требуемый ролью для компетенции. Функциональное."@ru ,
+        "The mastery level the role requires for the competence. Functional."@en .
+
+############################ ДАТА-СВОЙСТВА ############################
+
+krm:code a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:range xsd:string ;
+    rdfs:label "код"@ru , "code"@en ;
+    rdfs:comment "Канонический код-ключ, ЕДИНСТВЕННАЯ схема: КИУ = <компетенция>_<индикатор>_<уровень[+вариация]> (например MF-1_MF-1.1_Б, MF-1_MF-1.3_Б1); компетенция = MF-1; индикатор = MF-1.1. Строится стандартно из составных частей. Суррогатные id вида «КИУ-NNN» НЕ используются. IRI чеканится из кода — детерминизм на уровне графа; та же схема согласована с системой прохождения."@ru ,
+        "The canonical key code, the SINGLE scheme: CIL = <competence>_<indicator>_<level[+variation]> (e.g. MF-1_MF-1.1_Б, MF-1_MF-1.3_Б1); competence = MF-1; indicator = MF-1.1. Constructed standardly from its parts. Surrogate ids like 'КИУ-NNN' are NOT used. The IRI is minted from the code — instance-level determinism; the same scheme is aligned with the assessment-delivery system."@en .
+
+krm:variation a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:KIU ; rdfs:range xsd:integer ;
+    rdfs:label "номер вариации"@ru , "variation number"@en ;
+    rdfs:comment "Цифра после кода уровня (Б1 → 1). Отсутствует, если у уровня нет вариаций. Вариации — параллельные грани одного уровня, не градации сложности."@ru ,
+        "The digit after the level code (Б1 → 1). Absent if the level has no variations. Variations are parallel facets of one level, not difficulty grades."@en .
+
+krm:levelFormulation a owl:DatatypeProperty ;
+    rdfs:domain krm:KIU ; rdfs:range rdfs:Literal ;
+    rdfs:label "формулировка уровня"@ru , "level statement"@en ;
+    rdfs:comment "Текст результата освоения уровня (ячейка КРМ). Дано извне и неизменно; сырьё, по которому эксперт пишет обобщённый дескриптор (модуль КИМ) — уже НАШ артефакт."@ru ,
+        "The mastery-level outcome statement (a KRM cell). Given from outside and immutable; the raw material from which an expert authors the general descriptor (the KIM module) — which is OUR artefact."@en .
+
+krm:formulation a owl:DatatypeProperty ;
+    rdfs:range rdfs:Literal ;
+    rdfs:label "формулировка"@ru , "statement"@en ;
+    rdfs:comment "Формулировка компетенции, индикатора либо дескриптора (обобщённого или частного). Без домена — переиспользуется. Формулировки ОСТАЮТСЯ В ГРАФЕ (в отличие от содержимого заданий, вынесенного наружу): это знание и контекст генерации."@ru ,
+        "The statement of a competence, an indicator, or a descriptor (general or specific). No domain — reused. Statements STAY IN THE GRAPH (unlike task content, which is stored outside): they are knowledge and generation context."@en .
+
+############################ МАРКЕРЫ ТРЕБОВАНИЯ РОЛИ И ПОЛЯ РОЛИ ############################
+
+# Ячейка матрицы «компетенция × роль» = одно требование роли. Значения Б/С/П → krm:requiredLevel.
+# Помимо уровней встречаются маркеры: «+» (вспомогательная компетенция) и «*» (особый, см. ниже).
+krm:marker a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:RoleRequirement ; rdfs:range skos:Concept ;
+    rdfs:label "маркер требования"@ru , "requirement marker"@en ;
+    rdfs:comment "Маркер ячейки матрицы ролей помимо уровня (SKOS krm:roleMarkers): «+» вспомогательная, «*» особый. Для Б/С/П маркер отсутствует, заполнен krm:requiredLevel; «−» означает отсутствие требования (RoleRequirement не создаётся)."@ru ,
+        "A role-matrix cell marker beyond a level (SKOS krm:roleMarkers): '+' auxiliary, '*' special. For B/S/P the marker is absent and krm:requiredLevel is set; '−' means no requirement (no RoleRequirement is created)."@en .
+
+krm:roleMarkers a skos:ConceptScheme ; rdfs:label "Маркеры требования роли"@ru , "Role requirement markers"@en .
+krm:Marker_Aux a skos:Concept ; skos:inScheme krm:roleMarkers ; skos:notation "+" ;
+    skos:prefLabel "вспомогательная компетенция"@ru , "auxiliary competence"@en .
+krm:Marker_Star a skos:Concept ; skos:inScheme krm:roleMarkers ; skos:notation "*" ;
+    skos:prefLabel "особый маркер (требует уточнения)"@ru , "special marker (to be clarified)"@en ;
+    skos:scopeNote "В легенде исходной КРМ не определён; встречается построчно у части профессиональных компетенций. Семантика в источнике не раскрыта."@ru ,
+        "Not defined in the source KRM legend; appears row-wise on some professional competencies. Its semantics is not specified in the source."@en .
+
+krm:roleDefinition a owl:DatatypeProperty ; rdfs:domain krm:Role ; rdfs:range rdfs:Literal ;
+    rdfs:label "определение роли"@ru , "role definition"@en .
+krm:roleDuties a owl:DatatypeProperty ; rdfs:domain krm:Role ; rdfs:range rdfs:Literal ;
+    rdfs:label "трудовые действия"@ru , "work duties"@en .
+krm:roleFocus a owl:DatatypeProperty ; rdfs:domain krm:Role ; rdfs:range rdfs:Literal ;
+    rdfs:label "фокус компетенций"@ru , "competence focus"@en .
+krm:roleFunction a owl:DatatypeProperty ; rdfs:domain krm:Role ; rdfs:range rdfs:Literal ;
+    rdfs:label "функция в ИИ-проекте"@ru , "function in an AI project"@en .
+
+# Трудовая функция (из описания роли) — связь КИУ ↔ Роль (колонка c13 строки КИУ).
+krm:LaborFunction a owl:Class ;
+    rdfs:label "Трудовая функция"@ru , "Labor function"@en ;
+    rdfs:comment "Трудовая функция из описания профессиональной роли. Через неё КИУ соотносится с ролью (колонка «Трудовые функции (из описания роли)» декомпозированной КРМ)."@ru ,
+        "A labor function from a professional role's description. A CIL is related to a role through it (the 'Labor functions (from the role description)' column of the decomposed KRM)."@en .
+
+krm:ofRole a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:LaborFunction ; rdfs:range krm:Role ;
+    rdfs:label "из роли"@ru , "of role"@en ;
+    rdfs:comment "Роль, из описания которой взята трудовая функция."@ru , "The role whose description the labor function comes from."@en .
+
+krm:hasLaborFunction a owl:ObjectProperty ;
+    rdfs:domain krm:KIU ; rdfs:range krm:LaborFunction ;
+    rdfs:label "трудовая функция"@ru , "has labor function"@en ;
+    rdfs:comment "Связывает КИУ с трудовой(-ыми) функцией(-ями) из описания роли (c13). Многие-ко-многим; через неё выводится связь КИУ ↔ роль."@ru ,
+        "Links a CIL to labor function(s) from a role description (c13). Many-to-many; the CIL ↔ role link is inferred through it."@en .
+
+############################ КЛЮЧИ (детерминизм на уровне графа) ############################
+
+krm:KIU        owl:hasKey ( krm:code ) .
+krm:Competence owl:hasKey ( krm:code ) .
+krm:Indicator  owl:hasKey ( krm:code ) .
+krm:Role       owl:hasKey ( krm:code ) .

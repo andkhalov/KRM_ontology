@@ -1,0 +1,205 @@
+# definitions.ttl — слой ЛОГИКИ: определённые классы и замкнутые перечисления (OWL 2 DL).
+# Это не валидация (она в SHACL), а ВЫВОД: ризонер сам классифицирует индивиды (открытое/закрытое
+# задание, автопроверяемое/экспертное, готовый вариант, нейтральный дескриптор и т. п.).
+#
+# КЛЮЧЕВОЕ: форма задания (открытое/закрытое) и контур проверки (авто/эксперт) НЕ ХРАНЯТСЯ
+# свойствами — они ОДНОЗНАЧНО СЛЕДУЮТ из типа задания (krm:taskType) и выводятся здесь.
+# Прежние отдельные свойства krm:checkContour и композиция фасетов упразднены.
+#
+# Требует DL-ризонера (HermiT/Pellet в Protégé). В триплсторе без DL-вывода эти определения
+# материализуются SPARQL-правилами; ядро + inferences остаются RL-безопасными.
+#
+# УДАЛЕНО (осознанно): верхняя таксономия из семи «корзин» (CompetencyEntity/Material/Party/OrgUnit/
+# ResultEntity/ProcessEntity/SupportingResource) вместе с owl:AllDisjointClasses по ним. Она была
+# оформлением дерева в Protégé, а не онтологическим обязательством: заставляла каждый класс
+# приписывать ровно к одной корзине (TestVariant — «материал», Assessment — «процесс»?) и делала
+# противоречием любую сущность двойной природы. Осмысленные надклассы остались там, где они
+# что-то значат: krm:GeneratedArtefact ⊑ prov:Entity (process.ttl).
+
+@prefix krm:  <http://example.org/krm#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix dct:  <http://purl.org/dc/terms/> .
+
+<http://example.org/krm/definitions> a owl:Ontology ;
+    dct:title "Определённые классы и перечисления (логика, OWL 2 DL)"@ru , "Defined classes and enumerations (logic, OWL 2 DL)"@en ;
+    owl:versionInfo "1.0.0" ;
+    owl:imports <http://example.org/krm/inferences> ;
+    dct:description "Аксиомы классификации: необходимые-и-достаточные условия (equivalentClass) и замкнутые перечисления (oneOf). Форма и контур проверки задания выводятся из типа. Подключать с DL-ризонером."@ru ,
+        "Classification axioms: necessary-and-sufficient conditions (equivalentClass) and closed enumerations (oneOf). A task's form and check contour are derived from its type. Use with a DL reasoner."@en .
+
+############################ ЗАМКНУТЫЕ ПЕРЕЧИСЛЕНИЯ ############################
+# Все четыре перечня фиксированы решениями и не расширяются без смены версии онтологии.
+
+# Доменов (типов компетенций) ровно четыре.
+krm:Domain owl:equivalentClass
+    [ a owl:Class ; owl:oneOf ( krm:Domain_Professional krm:Domain_Advanced krm:Domain_Universal krm:Domain_Industry ) ] .
+
+# Уровней освоения ровно три (Б/С/П).
+krm:MasteryLevel owl:equivalentClass
+    [ a owl:Class ; owl:oneOf ( krm:Level_B krm:Level_S krm:Level_P ) ] .
+
+# Типов задания ровно четыре — жёсткий перечень (отменяет фасетную типизацию).
+krm:TaskType owl:equivalentClass
+    [ a owl:Class ; owl:oneOf ( krm:TT_SingleChoice krm:TT_MultipleChoice krm:TT_OpenText krm:TT_Code ) ] .
+
+# Языков (они же среды выполнения) ровно пять.
+krm:ProgrammingLanguage owl:equivalentClass
+    [ a owl:Class ; owl:oneOf ( krm:Lang_SQL krm:Lang_Python krm:Lang_Java krm:Lang_Cpp krm:Lang_CSharp ) ] .
+
+############################ ФОРМА ЗАДАНИЯ: ЗАКРЫТОЕ / ОТКРЫТОЕ ############################
+# Выводится из типа: закрытое = {выбор одного, выбор нескольких}; открытое = {открытый текст, код}.
+
+krm:ClosedTask a owl:Class ;
+    rdfs:label "Закрытое задание"@ru , "Closed task"@en ;
+    rdfs:comment "Задание с выбором из предложенных вариантов. Выводится из типа, не хранится."@ru ,
+        "A task with a choice among offered options. Derived from the type, not stored."@en ;
+    owl:equivalentClass [ a owl:Class ; owl:intersectionOf (
+        krm:TaskTemplate
+        [ a owl:Restriction ; owl:onProperty krm:taskType ;
+          owl:someValuesFrom [ a owl:Class ; owl:oneOf ( krm:TT_SingleChoice krm:TT_MultipleChoice ) ] ] ) ] .
+
+krm:OpenTask a owl:Class ;
+    rdfs:label "Открытое задание"@ru , "Open task"@en ;
+    rdfs:comment "Задание, где обучающийся порождает ответ сам (текст или код). Выводится из типа."@ru ,
+        "A task where the student produces the answer themselves (text or code). Derived from the type."@en ;
+    owl:equivalentClass [ a owl:Class ; owl:intersectionOf (
+        krm:TaskTemplate
+        [ a owl:Restriction ; owl:onProperty krm:taskType ;
+          owl:someValuesFrom [ a owl:Class ; owl:oneOf ( krm:TT_OpenText krm:TT_Code ) ] ] ) ] .
+
+krm:OpenTask owl:disjointWith krm:ClosedTask .
+
+############################ КОНТУР ПРОВЕРКИ: АВТО / ЭКСПЕРТ ############################
+# Выводится из типа: экспертной проверки требует ТОЛЬКО открытый текстовый ответ.
+# Отсюда квота «доля открытых ≈ 20% / доля автопроверяемых ≈ 80%» в политике сборки.
+
+krm:AutoCheckedTask a owl:Class ;
+    rdfs:label "Автопроверяемое задание"@ru , "Automatically checked task"@en ;
+    rdfs:comment "Проверяется без участия эксперта: выбор одного, выбор нескольких, код (автотесты). Выводится из типа."@ru ,
+        "Checked without an expert: single choice, multiple choice, code (automated tests). Derived from the type."@en ;
+    owl:equivalentClass [ a owl:Class ; owl:intersectionOf (
+        krm:TaskTemplate
+        [ a owl:Restriction ; owl:onProperty krm:taskType ;
+          owl:someValuesFrom [ a owl:Class ; owl:oneOf ( krm:TT_SingleChoice krm:TT_MultipleChoice krm:TT_Code ) ] ] ) ] .
+
+krm:ExpertCheckedTask a owl:Class ;
+    rdfs:label "Задание с экспертной проверкой"@ru , "Expert-checked task"@en ;
+    rdfs:comment "Требует проверки экспертом: только открытый текстовый ответ. Выводится из типа."@ru ,
+        "Requires an expert check: open text answer only. Derived from the type."@en ;
+    owl:equivalentClass [ a owl:Class ; owl:intersectionOf (
+        krm:TaskTemplate
+        [ a owl:Restriction ; owl:onProperty krm:taskType ; owl:hasValue krm:TT_OpenText ] ) ] .
+
+krm:AutoCheckedTask owl:disjointWith krm:ExpertCheckedTask .
+
+############################ ИСПОЛНЯЕМОЕ ЗАДАНИЕ (КОД) ############################
+
+krm:ExecutableTask a owl:Class ;
+    rdfs:label "Исполняемое задание (код)"@ru , "Executable task (code)"@en ;
+    rdfs:comment "Задание типа «код»: требует язык, автотесты с лимитами и эталон (SHACL). Ризонер выводит, что оно одновременно открытое и автопроверяемое."@ru ,
+        "A 'code' task: requires a language, automated tests with limits and a reference solution (SHACL). The reasoner infers that it is both open and automatically checked."@en ;
+    owl:equivalentClass [ a owl:Class ; owl:intersectionOf (
+        krm:TaskTemplate
+        [ a owl:Restriction ; owl:onProperty krm:taskType ; owl:hasValue krm:TT_Code ] ) ] .
+
+############################ ПРАКТИКО-ОРИЕНТИРОВАННОЕ ЗАДАНИЕ ############################
+# ОТДЕЛЬНАЯ ось: НЕ выводится из типа и не связана с ним (закрытый тест на реальном кейсе —
+# практический; код-задание может быть учебным). Своя квота в политике сборки (ориентир 60/40).
+
+krm:PracticeOrientedTask a owl:Class ;
+    rdfs:label "Практико-ориентированное задание"@ru , "Practice-oriented task"@en ;
+    owl:equivalentClass [ a owl:Class ; owl:intersectionOf (
+        krm:TaskTemplate
+        [ a owl:Restriction ; owl:onProperty krm:practiceOriented ; owl:hasValue true ] ) ] .
+
+############################ НАПИСАННОЕ vs ЗАПЛАНИРОВАННОЕ ЗАДАНИЕ ############################
+# Смета: планировщик заранее создаёт задания со всеми метаданными, но без содержимого. Наличие
+# ссылки на содержимое (krm:contentRef) отличает написанное задание от каркаса-заготовки.
+#
+# ВНИМАНИЕ — ГРАНИЦА ВЫРАЗИМОСТИ OWL. «Написанное» определяется положительно и выводится:
+# krm:AuthoredTask ≡ TaskTemplate ⊓ ∃contentRef. А вот «запланированное, но НЕ написанное»
+# (отсутствие ссылки) в OWL НЕ ВЫРАЗИМО: открытый мир не отличает «значения нет» от «значение не
+# утверждено». Поэтому класса krm:PlannedTask здесь НЕТ — «не написано» проверяется в SHACL,
+# который работает по закрытому миру (sh:maxCount 0 / отсутствие krm:contentRef).
+
+krm:AuthoredTask a owl:Class ;
+    rdfs:label "Написанное задание"@ru , "Authored task"@en ;
+    rdfs:comment "Задание, у которого произведено содержимое (есть krm:contentRef). Каркас сметы — задание с метаданными, но без ссылки — этим классом НЕ покрывается и в OWL не определяется (см. комментарий выше)."@ru ,
+        "A task whose content has been produced (krm:contentRef is present). A plan slot — a task with metadata but no reference — is NOT covered by this class and is not definable in OWL (see the comment above)."@en ;
+    owl:equivalentClass [ a owl:Class ; owl:intersectionOf (
+        krm:TaskTemplate
+        [ a owl:Restriction ; owl:onProperty krm:contentRef ; owl:someValuesFrom xsd:string ] ) ] .
+
+############################ ДЕСКРИПТОРЫ ############################
+
+krm:NeutralDescriptor a owl:Class ;
+    rdfs:label "Нейтральный дескриптор"@ru , "Neutral descriptor"@en ;
+    owl:equivalentClass [ a owl:Class ; owl:intersectionOf (
+        krm:Descriptor
+        [ a owl:Restriction ; owl:onProperty krm:isNeutral ; owl:hasValue true ] ) ] .
+
+krm:ContextBoundDescriptor a owl:Class ;
+    rdfs:label "Контекстно-привязанный дескриптор"@ru , "Context-bound descriptor"@en ;
+    owl:equivalentClass [ a owl:Class ; owl:intersectionOf (
+        krm:Descriptor
+        [ a owl:Restriction ; owl:onProperty krm:isNeutral ; owl:hasValue false ] ) ] .
+
+############################ ВАРИАНТЫ ЗАДАНИЯ ############################
+
+krm:AgentGeneratedVariant a owl:Class ;
+    rdfs:label "Агентно-порождённый вариант"@ru , "Agent-generated variant"@en ;
+    owl:equivalentClass [ a owl:Class ; owl:intersectionOf (
+        krm:TaskVariant
+        [ a owl:Restriction ; owl:onProperty krm:generationMode ; owl:hasValue krm:GM_Agent ] ) ] .
+
+krm:DeterministicVariant a owl:Class ;
+    rdfs:label "Детерминированный вариант"@ru , "Deterministic variant"@en ;
+    owl:equivalentClass [ a owl:Class ; owl:intersectionOf (
+        krm:TaskVariant
+        [ a owl:Restriction ; owl:onProperty krm:generationMode ; owl:hasValue krm:GM_Seed ] ) ] .
+
+# Готовность к прохождению — ВЫВОДИМОЕ свойство, а не хранимый флаг.
+# Прежний krm:readyForSitting (xsd:boolean) удалён: он дублировал состояние, которое полностью
+# определяется пройденной валидацией и наличием экспертной приёмки. Прогресс-бар ассессмента
+# считает членов этого класса; в триплсторе без DL-вывода класс материализуется SPARQL-правилом.
+krm:ReadyVariant a owl:Class ;
+    rdfs:label "Вариант, готовый к прохождению"@ru , "Variant ready for sitting"@en ;
+    rdfs:comment "Вариант задания, допущенный в банк: пройдена валидация (krm:Validation с krm:passed = true) И есть экспертная приёмка (krm:ExpertAcceptance). Классифицируется автоматически."@ru ,
+        "A task variant admitted to the bank: validation passed (krm:Validation with krm:passed = true) AND an expert acceptance exists (krm:ExpertAcceptance). Classified automatically."@en ;
+    owl:equivalentClass [ a owl:Class ; owl:intersectionOf (
+        krm:TaskVariant
+        [ a owl:Restriction ; owl:onProperty krm:hasValidation ;
+          owl:someValuesFrom [ a owl:Class ; owl:intersectionOf (
+              krm:Validation
+              [ a owl:Restriction ; owl:onProperty krm:passed ; owl:hasValue true ] ) ] ]
+        [ a owl:Restriction ; owl:onProperty krm:hasAcceptance ; owl:someValuesFrom krm:ExpertAcceptance ] ) ] .
+
+############################ КИУ С ВАРИАЦИЕЙ ############################
+
+krm:VariedKIU a owl:Class ;
+    rdfs:label "КИУ с вариацией"@ru , "Varied CIL"@en ;
+    owl:equivalentClass [ a owl:Class ; owl:intersectionOf (
+        krm:KIU
+        [ a owl:Restriction ; owl:onProperty krm:variation ; owl:someValuesFrom xsd:integer ] ) ] .
+
+############################ ОБЩЕЕ СВОЙСТВО «использует ИПД» ############################
+
+krm:usesTool a owl:ObjectProperty ; rdfs:range krm:Tool ;
+    rdfs:label "использует ИПД"@ru , "uses tool"@en ;
+    rdfs:comment "Надсвойство: язык и библиотека (на задании) и фактический ИПД (на варианте) — частные случаи."@ru ,
+        "Super-property: language and library (on a task) and the actual tool (on a variant) are special cases."@en .
+krm:language   rdfs:subPropertyOf krm:usesTool .
+krm:library    rdfs:subPropertyOf krm:usesTool .
+krm:actualTool rdfs:subPropertyOf krm:usesTool .
+
+############################ НАВИГАЦИЯ ВНИЗ ПО ДЕРЕВУ КРМ ############################
+# Прежние четыре типизированные инверсии спины (hasBlock, hasCompetence, competenceHasIndicator,
+# indicatorHasKIU) УДАЛЕНЫ. Их заменяет одно отношение krm:narrower (krm-core) — обратное к
+# krm:broader, — потому что спина теперь настоящая таксономия, а не четыре несвязанных свойства:
+#     ?domain krm:narrower ?block            — дети узла
+#     ?domain krm:narrowerTransitive ?kiu    — все потомки, до листьев
+# Аналогично вниз по каскаду порождения: krm:derives (kim), обратное к krm:derivedFrom.

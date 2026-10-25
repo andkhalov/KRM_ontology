@@ -1,0 +1,418 @@
+# kim.ttl — Модуль КИМ: дескрипторы, задания, варианты.
+#
+# РЕШЕНИЕ (отменяет фасетную типизацию первой версии онтологии):
+# тип задания — ЖЁСТКИЙ ПЕРЕЧЕНЬ ИЗ ЧЕТЫРЁХ значений (krm:TaskType, замкнут oneOf в definitions):
+# выбор одного / выбор нескольких / открытый текстовый ответ / код. У задания РОВНО ОДИН тип
+# (krm:taskType — функциональное). Классы Interaction/BodyPart и композиция фасетов упразднены.
+# Форма (открытое/закрытое) и контур проверки (авто/эксперт) НЕ хранятся — они выводятся из типа
+# (определённые классы в definitions.ttl).
+#
+# ГРАНИЦА «ГРАФ / КОНТЕНТ» (решение): в графе — СТРУКТУРА и МЕТАДАННЫЕ (тип, сложность, время,
+# язык, связи, лимиты, веса, число тестов, провенанс, приёмка). СОДЕРЖИМОЕ задания (текст
+# постановки, варианты ответа-дистракторы, картинки, код эталона, входы/выходы тестов, текст
+# критериев рубрикатора) хранится ВНЕ графа и адресуется ссылкой krm:contentRef.
+# Исключение: формулировки КРМ (компетенции/индикатора/уровня, темы, источники, кейсы) и
+# формулировки дескрипторов ОСТАЮТСЯ в графе — это знание и контекст генерации, а не контент задания.
+#
+# ДЕСКРИПТОРЫ — два уровня: обобщённый (1:1 к КИУ, граница «данное КРМ / сделанное нами») и
+# частные (1–3 на обобщённый). Задание цепляется к частному.
+#
+# Кардинальности и условная обязательность («если код → язык + тесты + эталон + лимиты») — в SHACL
+# (shapes/task-shapes.ttl). Аннотации ru/en.
+
+@prefix krm:  <http://example.org/krm#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix dct:  <http://purl.org/dc/terms/> .
+
+<http://example.org/krm/kim> a owl:Ontology ;
+    dct:title "Модуль контрольно-измерительных материалов (КИМ)"@ru , "Assessment materials (KIM) module"@en ;
+    rdfs:label "КИМ (kim)"@ru , "Assessment materials (kim)"@en ;
+    owl:versionInfo "1.0.0" ;
+    owl:imports <http://example.org/krm/actors> ;
+    dct:description "Обобщённые и частные дескрипторы, задания и варианты заданий. Тип задания — жёсткий перечень из четырёх значений (выбор одного / выбор нескольких / открытый текст / код), ровно один на задание. В графе — структура и метаданные; содержимое задания — вне графа по ссылке."@ru ,
+        "General and specific descriptors, tasks and task variants. The task type is a hard four-value enumeration (single choice / multiple choice / open text / code), exactly one per task. The graph holds structure and metadata; task content lives outside, referenced by a link."@en .
+
+############################ КАСКАД ПОРОЖДЕНИЯ: ОДНО ОТНОШЕНИЕ, А НЕ ПЯТЬ ############################
+# Каскад КИУ → обобщённый дескриптор → частный дескриптор → задание → вариант — это ОДНО отношение
+# «порождено из», выраженное четырьмя типизированными рёбрами. Раньше пути «вверх, к КИУ» не
+# существовало как ребра: его собирали пятью цепочками-костылями (descriptorKIU, taskKIU,
+# variantKIU, kiuDescriptor, testVariantKIU). Теперь:
+#     ?v krm:derivedFrom ?x                — все предки узла каскада (транзитивно)
+#     ?v krm:derivedFrom ?k . ?k a krm:KIU — КИУ любого узла каскада, одним ребром
+#
+# Типизированные рёбра (fromKIU, specializes, forDescriptor, ofTemplate) сохраняют домены, ранги и
+# функциональность — они остаются рабочими ограничениями; krm:derivedFrom лишь связывает их в цепь.
+#
+# ГРАНИЦА: krm:includesVariant (ВТ → вариант) в это отношение НЕ входит — вариант теста не
+# «порождён из» задания, он его ВКЛЮЧАЕТ. Это композиция, а не деривация.
+
+krm:derivedFrom a owl:ObjectProperty , owl:TransitiveProperty ;
+    rdfs:label "порождено из"@ru , "derived from"@en ;
+    rdfs:comment "Транзитивное отношение каскада: узел порождён из своего предка (вариант ← задание ← частный дескриптор ← обобщённый дескриптор ← КИУ). Надсвойство четырёх типизированных рёбер. Даёт провенанс и трассируемость одним ребром. RL-безопасно (правило prp-trp); не функционально и не участвует в ограничениях кардинальности (транзитивные свойства в OWL 2 DL не могут быть простыми)."@ru ,
+        "The transitive cascade relation: a node is derived from its ancestor (variant ← task ← specific descriptor ← general descriptor ← CIL). Super-property of the four typed edges. Provides provenance and traceability in a single edge. RL-safe (rule prp-trp); not functional and not used in cardinality restrictions (transitive properties cannot be simple in OWL 2 DL)."@en .
+
+krm:derives a owl:ObjectProperty , owl:TransitiveProperty ;
+    owl:inverseOf krm:derivedFrom ;
+    rdfs:label "порождает"@ru , "derives"@en ;
+    rdfs:comment "Обратное к krm:derivedFrom — навигация вниз по каскаду: от КИУ ко всем порождённым дескрипторам, заданиям и вариантам. Заменяет прежнюю цепочку kiuDescriptor."@ru ,
+        "The inverse of krm:derivedFrom — downward navigation: from a CIL to all descriptors, tasks and variants derived from it. Replaces the former kiuDescriptor chain."@en .
+
+############################ ОБОБЩЁННЫЙ ДЕСКРИПТОР ############################
+
+krm:GeneralDescriptor a owl:Class ;
+    rdfs:label "Обобщённый дескриптор"@ru , "General descriptor"@en ;
+    rdfs:comment "Авторская переформулировка результата освоения КИУ; ровно один на КИУ (1:1). Это ГРАНИЦА между данным нам (КРМ — read-only, неизменна в рамках версии) и сделанным нами: у обобщённого дескриптора есть автор, провенанс, приёмка и версия, он может быть переписан без правки КРМ. Раскрывается 1–3 частными дескрипторами (krm:specializes); заданий напрямую не несёт. Код: <код КИУ>_G (например MF-1_MF-1.1_Б_G)."@ru ,
+        "An authored restatement of a CIL's mastery outcome; exactly one per CIL (1:1). It is the BOUNDARY between what is given to us (the KRM — read-only, immutable within a version) and what we make: a general descriptor has an author, provenance, acceptance and a version, and can be rewritten without touching the KRM. Elaborated by 1–3 specific descriptors (krm:specializes); carries no tasks directly. Code: <CIL code>_G."@en .
+
+krm:fromKIU a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:subPropertyOf krm:derivedFrom ;
+    rdfs:domain krm:GeneralDescriptor ; rdfs:range krm:KIU ;
+    rdfs:label "из КИУ"@ru , "from CIL"@en ;
+    rdfs:comment "Привязка обобщённого дескриптора ровно к одному КИУ (обратная трассируемость). Ровно один обобщённый дескриптор на КИУ — проверяется SHACL."@ru ,
+        "Binds a general descriptor to exactly one CIL (reverse traceability). Exactly one general descriptor per CIL — checked in SHACL."@en .
+
+############################ ЧАСТНЫЙ ДЕСКРИПТОР ############################
+
+krm:Descriptor a owl:Class ;
+    rdfs:label "Дескриптор (частный)"@ru , "Descriptor (specific)"@en ;
+    rdfs:comment "Минимальный измеримый результат («знать»/«уметь»), выделенный из обобщённого дескриптора. Базовая единица проектирования заданий и единица измерения: несёт максимальный балл, вес, тип результата и признак нейтральности. Принадлежит ровно одному обобщённому дескриптору (krm:specializes); 1–3 на обобщённый (SHACL). Путь к КИУ — через обобщённый (одним ребром krm:derivedFrom)."@ru ,
+        "A minimal measurable outcome ('know'/'can do') fragmented from a general descriptor. The base unit of task design and of measurement: carries the maximum score, weight, result type and neutrality flag. Belongs to exactly one general descriptor (krm:specializes); 1–3 per general one (SHACL). The path to the CIL runs through the general descriptor (a single krm:derivedFrom edge)."@en .
+
+krm:specializes a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:subPropertyOf krm:derivedFrom ;
+    rdfs:domain krm:Descriptor ; rdfs:range krm:GeneralDescriptor ;
+    rdfs:label "уточняет обобщённый дескриптор"@ru , "specializes"@en ;
+    rdfs:comment "Частный дескриптор уточняет ровно один обобщённый. Функциональное."@ru ,
+        "A specific descriptor specializes exactly one general descriptor. Functional."@en .
+
+krm:resultType a owl:ObjectProperty ;
+    rdfs:domain krm:Descriptor ; rdfs:range skos:Concept ;
+    rdfs:label "тип результата"@ru , "result type"@en ;
+    rdfs:comment "«знать» или «уметь» (SKOS krm:resultTypes)."@ru , "'know' or 'can do' (SKOS krm:resultTypes)."@en .
+
+krm:isNeutral a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Descriptor ; rdfs:range xsd:boolean ;
+    rdfs:label "нейтральный"@ru , "is neutral"@en ;
+    rdfs:comment "Истина — дескриптор технологически нейтрален; ложь — контекстно-привязан (инструмент неотделим от результата)."@ru ,
+        "True — the descriptor is technology-neutral; false — context-bound (the tool is inseparable from the outcome)."@en .
+
+krm:maxScore a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:range xsd:decimal ;
+    rdfs:label "максимальный балл"@ru , "maximum score"@en ;
+    rdfs:comment "Сырой максимальный балл (нормализуется в 0–100 по рубрикатору). Без домена: применимо к дескриптору и заданию."@ru ,
+        "Raw maximum score (normalized to 0–100 via the rubric). No domain: applies to descriptors and tasks."@en .
+
+krm:weight a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:range xsd:decimal ;
+    rdfs:label "вес"@ru , "weight"@en ;
+    rdfs:comment "Относительный вес узла среди детей одного родителя при рекомпозиции (для дескриптора — рекомендуемо [0,75; 1,5], по умолчанию 1,0)."@ru ,
+        "Relative weight of a node among siblings during recomposition (for a descriptor, recommended [0.75; 1.5], default 1.0)."@en .
+
+############################ АВТОРСТВО ############################
+
+krm:authoredBy a owl:ObjectProperty ;
+    rdfs:range krm:Expert ;
+    rdfs:label "автор"@ru , "authored by"@en ;
+    rdfs:comment "Эксперт-автор дескриптора (обобщённого или частного) либо задания. Без домена — свойство переиспользуется."@ru ,
+        "The expert author of a descriptor (general or specific) or of a task. No domain — the property is reused."@en .
+
+############################ ЗАДАНИЕ (ШАБЛОН) ############################
+
+krm:TaskTemplate a owl:Class ;
+    rdfs:label "Задание (шаблон)"@ru , "Task (template)"@en ;
+    skos:altLabel "Задание КИМ"@ru ;
+    rdfs:comment "Задание на основе одного частного дескриптора: пишет эксперт (контекст из графа знаний) либо порождает агент с последующей приёмкой. Имеет РОВНО ОДИН тип (krm:taskType) из четырёх. Несёт независимые оценки эксперта — сложность (krm:difficulty) и ожидаемое время (krm:estimatedMinutes), а также признак практико-ориентированности. Содержимое (текст, варианты ответа, картинки) — вне графа (krm:contentRef)."@ru ,
+        "A task based on one specific descriptor: authored by an expert (with context from the knowledge graph) or generated by an agent and then accepted. Has EXACTLY ONE type (krm:taskType) out of four. Carries the expert's independent estimates — difficulty (krm:difficulty) and expected time (krm:estimatedMinutes) — plus a practice-orientation flag. Content (text, answer options, images) lives outside the graph (krm:contentRef)."@en .
+
+krm:forDescriptor a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:subPropertyOf krm:derivedFrom ;
+    rdfs:domain krm:TaskTemplate ; rdfs:range krm:Descriptor ;
+    rdfs:label "на дескриптор"@ru , "for descriptor"@en ;
+    rdfs:comment "Задание строится ровно на одном частном дескрипторе."@ru ,
+        "A task is built on exactly one specific descriptor."@en .
+
+############################ ТИП ЗАДАНИЯ — ЗАМКНУТЫЙ ПЕРЕЧЕНЬ (4) ############################
+
+krm:TaskType a owl:Class ; rdfs:subClassOf skos:Concept ;
+    rdfs:label "Тип задания"@ru , "Task type"@en ;
+    rdfs:comment "Замкнутый перечень из ЧЕТЫРЁХ типов: выбор одного / выбор нескольких / открытый текстовый ответ / код. Перечень закрыт owl:oneOf (definitions.ttl) и проверяется sh:in (task-shapes). Не расширять без изменения версии онтологии: типы жёстко фиксированы решением по системе прохождения."@ru ,
+        "A closed enumeration of FOUR types: single choice / multiple choice / open text answer / code. Closed by owl:oneOf (definitions.ttl) and checked with sh:in (task-shapes). Do not extend without an ontology version change: the types are fixed by the delivery-system decision."@en .
+
+krm:taskTypes a skos:ConceptScheme ; rdfs:label "Типы заданий"@ru , "Task types"@en ;
+    dct:title "Типы заданий (замкнутый перечень)"@ru , "Task types (closed enumeration)"@en .
+
+krm:TT_SingleChoice a krm:TaskType ; skos:inScheme krm:taskTypes ; skos:notation "single_choice" ;
+    skos:prefLabel "тест: выбор одного варианта"@ru , "test: single choice"@en ;
+    skos:definition "Закрытое задание: из предложенных вариантов верен ровно один. Проверяется автоматически."@ru ,
+        "A closed task: exactly one of the offered options is correct. Checked automatically."@en .
+
+krm:TT_MultipleChoice a krm:TaskType ; skos:inScheme krm:taskTypes ; skos:notation "multiple_choice" ;
+    skos:prefLabel "тест: выбор нескольких вариантов"@ru , "test: multiple choice"@en ;
+    skos:definition "Закрытое задание: верны один или несколько вариантов. Проверяется автоматически (возможен дробный балл по рубрикатору)."@ru ,
+        "A closed task: one or more options are correct. Checked automatically (partial credit possible via the rubric)."@en .
+
+krm:TT_OpenText a krm:TaskType ; skos:inScheme krm:taskTypes ; skos:notation "open_text" ;
+    skos:prefLabel "открытый вопрос (текстовый ответ)"@ru , "open question (text answer)"@en ;
+    skos:definition "Открытое задание: обучающийся описывает решение в свободной форме. ЕДИНСТВЕННЫЙ тип с экспертной проверкой — отсюда квота доли открытых заданий в варианте теста."@ru ,
+        "An open task: the student describes the solution in free form. The ONLY expert-checked type — hence the open-task share quota in a test variant."@en .
+
+krm:TT_Code a krm:TaskType ; skos:inScheme krm:taskTypes ; skos:notation "code" ;
+    skos:prefLabel "код"@ru , "code"@en ;
+    skos:definition "Открытое задание с исполняемым решением на одном из пяти языков (krm:language). Проверяется автоматически автотестами: обязательны язык, ≥1 тест с лимитами и эталонное решение (SHACL)."@ru ,
+        "An open task with an executable solution in one of five languages (krm:language). Checked automatically by tests: language, ≥1 test with limits and a reference solution are mandatory (SHACL)."@en .
+
+krm:taskType a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:TaskTemplate ; rdfs:range krm:TaskType ;
+    rdfs:label "тип задания"@ru , "task type"@en ;
+    rdfs:comment "РОВНО ОДИН тип на задание (функциональное). Композитных заданий («код + открытый комментарий») не бывает — решение зафиксировано. Из типа ВЫВОДЯТСЯ форма (закрытое/открытое) и контур проверки (авто/эксперт) — см. определённые классы в definitions.ttl; отдельными свойствами они не хранятся."@ru ,
+        "EXACTLY ONE type per task (functional). Composite tasks ('code + open comment') do not exist — a fixed decision. The form (closed/open) and the check contour (automated/expert) are DERIVED from the type — see the defined classes in definitions.ttl; they are not stored as separate properties."@en .
+
+############################ ОЦЕНКИ ЭКСПЕРТА: СЛОЖНОСТЬ И ВРЕМЯ ############################
+
+krm:difficulty a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:TaskTemplate ; rdfs:range xsd:integer ;
+    rdfs:label "сложность (1–5)"@ru , "difficulty (1–5)"@en ;
+    rdfs:comment "Сложность задания по порядковой шкале 1–5; ставит эксперт при написании. ВАЖНО — сложность ОРТОГОНАЛЬНА: (а) уровню освоения КИУ (на базовом уровне бывают трудные задания, на продвинутом — лёгкие: уровень Б/С/П — это требование ОП к студенту, а сложность — свойство самого задания); (б) времени выполнения (выбор варианта ответа отвечается за минуту, но может требовать глубокого понимания). Не выводить одно из другого. Суммируется по варианту теста и подчинён диапазону политики сборки (krm:AssemblyPolicy)."@ru ,
+        "Task difficulty on a 1–5 ordinal scale; set by the expert at authoring time. IMPORTANT — difficulty is ORTHOGONAL to: (a) the CIL mastery level (a basic level can carry hard tasks and an advanced one easy tasks: B/S/P is what the program requires of a student, while difficulty is a property of the task itself); (b) the solving time (a multiple-choice item may be answered in a minute yet demand deep understanding). Never derive one from the other. Summed over a test variant and bounded by the assembly policy (krm:AssemblyPolicy)."@en .
+
+krm:estimatedMinutes a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:TaskTemplate ; rdfs:range xsd:integer ;
+    rdfs:label "оценка времени, мин"@ru , "estimated minutes"@en ;
+    rdfs:comment "Ожидаемое время выполнения задания; ставит эксперт. Связано со сложностью лишь косвенно (см. krm:difficulty). Суммируется в бюджет варианта теста (диапазон — в krm:AssemblyPolicy)."@ru ,
+        "Expected solving time of a task; set by the expert. Only indirectly related to difficulty (see krm:difficulty). Summed into the test-variant budget (range in krm:AssemblyPolicy)."@en .
+
+krm:practiceOriented a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:TaskTemplate ; rdfs:range xsd:boolean ;
+    rdfs:label "практико-ориентированное"@ru , "practice-oriented"@en ;
+    rdfs:comment "ОТДЕЛЬНАЯ ось классификации, не выводимая из типа: открытое задание обычно практическое, но закрытый тест на реальном кейсе тоже практический, а код-задание может быть учебно-теоретическим. Своя квота в политике сборки (ориентир методики — 60% практических / 40% теоретических)."@ru ,
+        "A SEPARATE classification axis, not derivable from the type: an open task is usually practical, but a closed test on a real case is practical too, while a code task may be purely academic. Has its own quota in the assembly policy (methodology guideline — 60% practical / 40% theoretical)."@en .
+
+############################ КОД-ЗАДАНИЯ: ЯЗЫК И БИБЛИОТЕКИ (ИПД) ############################
+
+krm:ProgrammingLanguage a owl:Class ; rdfs:subClassOf krm:Tool ;
+    rdfs:label "Язык программирования"@ru , "Programming language"@en ;
+    rdfs:comment "Частный вид ИПД. ЗАМКНУТЫЙ перечень из пяти языков — это же и среда выполнения задания (отдельной оси «среда» нет): SQL, Python, Java, C++, C#. Закрыт owl:oneOf (definitions.ttl)."@ru ,
+        "A kind of tool (ИПД). A CLOSED five-language enumeration — which is also the task's execution environment (there is no separate 'environment' axis): SQL, Python, Java, C++, C#. Closed by owl:oneOf (definitions.ttl)."@en .
+
+# Версия языка и идентификатор языка в песочнице Judge0 — метаданные среды исполнения, которые передаются
+# вместе с заданием в систему прохождения. krm:judge0Id задан у всех пяти языков (в т.ч. SQL = 82: SQL
+# исполняется в SQLite 3.27.2, поэтому SQL-задания пишутся в подмножестве этого диалекта).
+krm:languageVersion a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:ProgrammingLanguage ; rdfs:range xsd:string ;
+    rdfs:label "версия языка/среды"@ru , "language/runtime version"@en .
+krm:judge0Id a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:ProgrammingLanguage ; rdfs:range xsd:integer ;
+    rdfs:label "ID языка в Judge0"@ru , "Judge0 language id"@en ;
+    rdfs:comment "Идентификатор языка в песочнице Judge0; передаётся вместе с заданием в систему прохождения, чтобы задание исполнилось."@ru ,
+        "Language identifier in the Judge0 sandbox; delivered with the task to the test-delivery system so that the task can be executed."@en .
+
+krm:Lang_SQL    a krm:ProgrammingLanguage ; skos:inScheme krm:tools ; skos:notation "sql" ;
+    skos:prefLabel "SQL"@ru , "SQL"@en ; krm:languageVersion "SQL (SQLite 3.27.2)" ; krm:judge0Id 82 .
+krm:Lang_Python a krm:ProgrammingLanguage ; skos:inScheme krm:tools ; skos:notation "python" ;
+    skos:prefLabel "Python"@ru , "Python"@en ; krm:languageVersion "Python (3.8.1)" ; krm:judge0Id 71 .
+krm:Lang_Java   a krm:ProgrammingLanguage ; skos:inScheme krm:tools ; skos:notation "java" ;
+    skos:prefLabel "Java"@ru , "Java"@en ; krm:languageVersion "Java (OpenJDK 13.0.1)" ; krm:judge0Id 62 .
+krm:Lang_Cpp    a krm:ProgrammingLanguage ; skos:inScheme krm:tools ; skos:notation "cpp" ;
+    skos:prefLabel "C++"@ru , "C++"@en ; krm:languageVersion "C++ (GCC 9.2.0)" ; krm:judge0Id 54 .
+krm:Lang_CSharp a krm:ProgrammingLanguage ; skos:inScheme krm:tools ; skos:notation "csharp" ;
+    skos:prefLabel "C#"@ru , "C#"@en ; krm:languageVersion "C# (Mono 6.6.0.161)" ; krm:judge0Id 51 .
+
+krm:language a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:TaskTemplate ; rdfs:range krm:ProgrammingLanguage ;
+    rdfs:label "язык программирования"@ru , "programming language"@en ;
+    rdfs:comment "Язык (и тем самым среда выполнения) код-задания; берётся из ИПД, заявленных ОП. Обязателен при krm:taskType = krm:TT_Code и запрещён при прочих типах (SHACL)."@ru ,
+        "The language (and thereby the execution environment) of a code task; taken from the tools declared by the program. Mandatory when krm:taskType = krm:TT_Code and forbidden otherwise (SHACL)."@en .
+
+krm:Library a owl:Class ; rdfs:subClassOf krm:Tool ;
+    rdfs:label "Библиотека / фреймворк"@ru , "Library / framework"@en ;
+    rdfs:comment "Частный вид ИПД — библиотека или фреймворк. Для пилота среда подключает все библиотеки сразу, поэтому свойство необязательно."@ru ,
+        "A kind of tool — a library or framework. For the pilot the environment loads all libraries at once, so the property is optional."@en .
+
+krm:library a owl:ObjectProperty ;
+    rdfs:domain krm:TaskTemplate ; rdfs:range krm:Library ;
+    rdfs:label "библиотека"@ru , "library"@en ;
+    rdfs:comment "Библиотеки/фреймворки код-задания (частный вид ИПД). Необязательно."@ru ,
+        "Libraries/frameworks of a code task (a kind of tool). Optional."@en .
+
+########## ЯЗЫК КАК МНОЖЕСТВО ДОПУСТИМЫХ + ЛЕЙБЛ РЕЖИМА (планирование сметы) ##########
+# krm:language (выше) — ОДИН фактический язык-среда. Здесь — МНОЖЕСТВО допустимых языков обобщённой
+# задачи (из ИПД ОП по КИУ, CQ21) и ЛЕЙБЛ режима. Конкретный язык выбирается из множества при
+# инициализации варианта (krm:actualTool); мощность множества задаёт число вариантов (CQ21→CQ49).
+
+krm:candidateLanguage a owl:ObjectProperty ;
+    rdfs:subPropertyOf krm:usesTool ;
+    rdfs:domain krm:TaskTemplate ; rdfs:range krm:ProgrammingLanguage ;
+    rdfs:label "допустимый язык"@ru , "candidate language"@en ;
+    rdfs:comment "Множество языков, допустимых для код-задания по КИУ+ОП (выведено из ИПД, заявленных ОП, krm:declaresTool). Из него при инициализации варианта выбирается ОДИН фактический язык (krm:actualTool); по мощности множества считается число вариантов (CQ21→CQ49). Для язык-агностичного задания множество пусто."@ru ,
+        "The set of languages admissible for a code task given the CIL+program (derived from the program's declared tools, krm:declaresTool). One actual language (krm:actualTool) is chosen from it per variant; its cardinality drives the variant count (CQ21→CQ49). Empty for a code-agnostic task."@en .
+
+krm:CodeLanguageMode a owl:Class ; owl:oneOf ( krm:CLM_LangSpecific krm:CLM_CodeAgnostic krm:CLM_NoCode ) ;
+    rdfs:label "Режим языка задания"@ru , "Task language mode"@en ;
+    rdfs:comment "Замкнутый лейбл обобщённой задачи по языку: привязана к конкретному множеству языков / язык-агностична (общий CS, алгоритмы) / без кода (не код-задание)."@ru ,
+        "A closed label of a generalized task by language: bound to a specific language set / code-agnostic (general CS, algorithms) / no-code (not a code task)."@en .
+krm:CLM_LangSpecific a krm:CodeLanguageMode ; rdfs:label "конкретный язык(и)"@ru , "language-specific"@en .
+krm:CLM_CodeAgnostic a krm:CodeLanguageMode ; rdfs:label "язык-агностичное"@ru , "code-agnostic"@en .
+krm:CLM_NoCode       a krm:CodeLanguageMode ; rdfs:label "без кода"@ru , "no-code"@en .
+
+krm:codeLanguageMode a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:TaskTemplate ; rdfs:range krm:CodeLanguageMode ;
+    rdfs:label "режим языка"@ru , "language mode"@en ;
+    rdfs:comment "Лейбл обобщённой задачи по ОТНОШЕНИЮ КИУ к программированию, НЕЗАВИСИМО от исполняемости (типа задания): krm:CLM_LangSpecific (про конкретный язык/библиотеку — krm:candidateLanguage непусто; напр. вопрос про pandas ДАЖЕ без исполняемого кода), krm:CLM_CodeAgnostic (про код/алгоритмы без привязки к языку), krm:CLM_NoCode (не про программирование). Ставится сметой из ИПД ОП. Единственное ограничение с типом: исполняемое задание (TT_Code) не может быть NoCode."@ru ,
+        "A label of a generalized task by the KIU's relation to programming, INDEPENDENT of executability (task type): krm:CLM_LangSpecific (about a specific language/library — non-empty krm:candidateLanguage; e.g. a pandas question EVEN without executable code), krm:CLM_CodeAgnostic (about code/algorithms with no specific language), krm:CLM_NoCode (not about programming). Set by the plan from the program's declared tools. Only type constraint: an executable task (TT_Code) cannot be NoCode."@en .
+
+############################ ВАРИАНТ ЗАДАНИЯ ############################
+
+krm:TaskVariant a owl:Class ;
+    rdfs:label "Вариант задания"@ru , "Task variant"@en ;
+    rdfs:comment "Экземпляр задания, предъявляемый обучающемуся: seed, фактические ИПД/ПЗ, ссылка на содержимое. Порождается детерминированно (seed) или агентом; допускается в банк после валидации и экспертной приёмки (тогда классифицируется как krm:ReadyVariant). Тип, сложность, время и дескриптор наследуются от задания (krm:ofTemplate) — на варианте не дублируются. На дескриптор — не менее двух вариантов (SHACL)."@ru ,
+        "An instance of a task presented to a student: seed, actual tools/subjects, a content reference. Generated deterministically (seed) or by an agent; admitted to the bank after validation and expert acceptance (then classified as krm:ReadyVariant). Type, difficulty, time and descriptor are inherited from the task (krm:ofTemplate) and are not duplicated on the variant. At least two variants per descriptor (SHACL)."@en .
+
+krm:ofTemplate a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:subPropertyOf krm:derivedFrom ;
+    rdfs:domain krm:TaskVariant ; rdfs:range krm:TaskTemplate ;
+    rdfs:label "из задания"@ru , "of template"@en .
+
+krm:generationMode a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:TaskVariant ; rdfs:range skos:Concept ;
+    rdfs:label "сценарий порождения"@ru , "generation mode"@en ;
+    rdfs:comment "Детерминированный (seed) или агентный (SKOS krm:generationModes)."@ru , "Deterministic (seed) or agentic (SKOS krm:generationModes)."@en .
+
+krm:variationKind a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:TaskVariant ; rdfs:range krm:VariationKind ;
+    rdfs:label "вид вариации"@ru , "variation kind"@en ;
+    rdfs:comment "Чем вариант отличается от собратьев того же обобщённого задания (krm:ofTemplate): krm:VK_Seed — тот же вопрос и объект, но другой seed (иные данные/инстанс); krm:VK_Object — другой ОБЪЕКТ при том же вопросе (иная таблица/картинка/выражение → и другие варианты ответа). Обеспечивает содержательное различие вариантов, а не только разный seed."@ru ,
+        "How a variant differs from its siblings of the same task (krm:ofTemplate): krm:VK_Seed — same question and object but a different seed (different data/instance); krm:VK_Object — a different OBJECT under the same question (different table/image/expression → hence different answer options). Ensures substantive, not merely seed-level, variant distinctness."@en .
+
+krm:VariationKind a owl:Class ; owl:oneOf ( krm:VK_Seed krm:VK_Object ) ;
+    rdfs:label "Вид вариации"@ru , "Variation kind"@en ;
+    rdfs:comment "Замкнутый перечень видов вариации задания: по seed / по объекту."@ru .
+krm:VK_Seed a krm:VariationKind ; rdfs:label "по seed"@ru , "by seed"@en .
+krm:VK_Object a krm:VariationKind ; rdfs:label "по объекту"@ru , "by object"@en .
+
+krm:actualTool a owl:ObjectProperty ;
+    rdfs:domain krm:TaskVariant ; rdfs:range krm:Tool ;
+    rdfs:label "фактический ИПД"@ru , "actual tool"@en ;
+    rdfs:comment "Фактический инструмент, реализованный в варианте. Должен входить в ИПД, декларированные ОП по этому КИУ (проверяется SHACL/SPARQL)."@ru ,
+        "The actual tool realized in the variant. Must be among the tools declared by the program for this CIL (checked in SHACL/SPARQL)."@en .
+
+krm:actualSubject a owl:ObjectProperty ;
+    rdfs:domain krm:TaskVariant ; rdfs:range krm:Subject ;
+    rdfs:label "фактический ПЗ"@ru , "actual subject"@en ;
+    rdfs:comment "Фактический предмет знания варианта. Должен входить в ПЗ, декларированные ОП по этому КИУ."@ru ,
+        "The actual subject of the variant. Must be among the subjects declared by the program for this CIL."@en .
+
+krm:seed a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:range xsd:string ;
+    rdfs:label "seed"@ru , "seed"@en ;
+    rdfs:comment "Начальное значение генератора; обеспечивает воспроизводимость варианта задания и варианта теста. Без домена — применимо к обоим."@ru ,
+        "The generator seed; ensures reproducibility of a task variant and of a test variant. No domain — applies to both."@en .
+
+############################ ССЫЛКА НА СОДЕРЖИМОЕ (КОНТЕНТ ВНЕ ГРАФА) ############################
+
+krm:contentRef a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:range xsd:string ;
+    rdfs:label "ссылка на содержимое"@ru , "content reference"@en ;
+    rdfs:comment "Устойчивая ссылка (URI/идентификатор) на содержимое, которое ХРАНИТСЯ ВНЕ ГРАФА: текст постановки, варианты ответа (дистракторы) и признак правильности, картинки, код эталонного решения, входы/ожидаемые выходы тестов, текст критериев рубрикатора. Осознанное решение: RDF — плохое хранилище для текстовых блобов; граф остаётся источником истины по СТРУКТУРЕ и МЕТАДАННЫМ. Без домена — применимо к заданию, варианту, тесту, эталону, критерию.\n\nСЛЕДСТВИЕ (смета): раз содержимое вне графа, узел krm:TaskTemplate в графе — это ЧИСТЫЕ МЕТАДАННЫЕ, то есть уже спецификация. Задание со всеми метаданными, но БЕЗ krm:contentRef — это ЗАПЛАНИРОВАННОЕ, НО НЕ НАПИСАННОЕ задание (каркас сметы); его метаданные и есть ТЗ на написание. Наличие ссылки = задание написано (класс krm:AuthoredTask). Отсутствие ссылки НЕ выражается в OWL (открытый мир: «нет утверждения» ≠ «нет значения») — «не написано» проверяется только SHACL (закрытый мир)."@ru ,
+        "A stable reference (URI/identifier) to content STORED OUTSIDE THE GRAPH: the statement text, answer options (distractors) with correctness flags, images, reference-solution code, test inputs/expected outputs, rubric-criterion texts. A deliberate decision: RDF is a poor store for text blobs; the graph remains the source of truth for STRUCTURE and METADATA. No domain — applies to tasks, variants, tests, reference solutions and criteria.\n\nCONSEQUENCE (the plan/'смета'): since content lives outside the graph, a krm:TaskTemplate node IS pure metadata — i.e. already a specification. A task with all metadata but WITHOUT krm:contentRef is a PLANNED, NOT-YET-AUTHORED task (a plan slot); its metadata IS the authoring brief. Presence of the reference = the task is authored (class krm:AuthoredTask). Absence CANNOT be expressed in OWL (open world: 'not asserted' ≠ 'has no value') — 'not authored' is checkable only in SHACL (closed world)."@en .
+
+############################ РУБРИКАТОР, ТЕСТЫ, ЭТАЛОН (МЕТАДАННЫЕ) ############################
+
+krm:Rubric a owl:Class ;
+    rdfs:label "Рубрикатор"@ru , "Rubric"@en ;
+    rdfs:comment "Правила перевода ответа в балл и начисления частичного балла по критериям. В графе — структура (набор критериев и их веса); тексты критериев — вне графа (krm:contentRef). Обязателен для открытых текстовых заданий (SHACL)."@ru ,
+        "Rules for converting an answer into a score and awarding partial credit by criteria. The graph holds the structure (the set of criteria and their weights); criterion texts live outside (krm:contentRef). Mandatory for open-text tasks (SHACL)."@en .
+
+krm:RubricCriterion a owl:Class ;
+    rdfs:label "Критерий рубрикатора"@ru , "Rubric criterion"@en ;
+    rdfs:comment "Отдельное требование с вкладом в балл (для дробного оценивания). В графе — вклад (krm:criterionWeight); формулировка критерия — вне графа."@ru ,
+        "An individual requirement with a contribution to the score (for partial credit). The graph holds the contribution (krm:criterionWeight); the criterion wording lives outside."@en .
+
+krm:TestCase a owl:Class ;
+    rdfs:label "Автотест (для код-заданий)"@ru , "Test case (for code tasks)"@en ;
+    rdfs:comment "Автотест код-задания. В графе — МЕТАДАННЫЕ: лимиты времени и памяти, признак краевого случая, ссылка на содержимое; сами входы/ожидаемые выходы — вне графа (krm:contentRef). Образец — ICPC/Kattis (.in/.ans), расширения DOMjudge. При krm:taskType = krm:TT_Code обязателен хотя бы один тест с лимитом времени (SHACL)."@ru ,
+        "An automated test of a code task. The graph holds METADATA: time and memory limits, an edge-case flag, a content reference; the inputs/expected outputs themselves live outside (krm:contentRef). Modeled on ICPC/Kattis (.in/.ans) with DOMjudge extensions. At least one test with a time limit is mandatory when krm:taskType = krm:TT_Code (SHACL)."@en .
+
+krm:ReferenceSolution a owl:Class ;
+    rdfs:label "Эталонное решение"@ru , "Reference solution"@en ;
+    rdfs:comment "Образцовое (принятое) решение — проверка решаемости задания и совпадения ожидаемого результата. Сам код/текст решения — вне графа (krm:contentRef). Обязателен для код-заданий (SHACL)."@ru ,
+        "An accepted model solution — it verifies the task's solvability and that the expected result matches. The solution code/text itself lives outside (krm:contentRef). Mandatory for code tasks (SHACL)."@en .
+
+krm:hasRubric a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:TaskTemplate ; rdfs:range krm:Rubric ;
+    rdfs:label "рубрикатор"@ru , "has rubric"@en .
+
+krm:hasCriterion a owl:ObjectProperty ;
+    rdfs:domain krm:Rubric ; rdfs:range krm:RubricCriterion ;
+    rdfs:label "критерий"@ru , "has criterion"@en .
+
+krm:hasTestCase a owl:ObjectProperty ;
+    rdfs:domain krm:TaskTemplate ; rdfs:range krm:TestCase ;
+    rdfs:label "автотест"@ru , "has test case"@en .
+
+krm:hasReferenceSolution a owl:ObjectProperty ;
+    rdfs:domain krm:TaskTemplate ; rdfs:range krm:ReferenceSolution ;
+    rdfs:label "эталон"@ru , "has reference solution"@en .
+
+############################ ОСНОВАНИЕ ОТВЕТА (обоснование правильности) ############################
+
+krm:AnswerRationale a owl:Class ;
+    rdfs:label "Основание ответа"@ru , "Answer rationale"@en ;
+    rdfs:comment "Обоснование ПОЧЕМУ правильный ответ верен — для ЛЮБОГО типа задания: почему верен выбранный вариант(ы), почему такой открытый ответ, почему эталонный код правильный. Прежде всего РАССУЖДЕНИЕ; опционально цитаты из источников (krm:cites). В графе — структура (узел основания + при наличии цитаты); сам текст — вне графа (krm:contentRef, как весь контент). Относится к заданию в целом. Пока база источников не подключена, цитаты НЕНАДЁЖНЫ — носитель обоснования это текст-рассуждение; судья проверяет его состоятельность (обосновывает ли оно именно отмеченный правильный ответ)."@ru ,
+        "A justification of WHY the correct answer is correct — for ANY task type: why the chosen option(s) are right, why this open answer, why the reference code is correct. Primarily REASONING; optionally source citations (krm:cites). The graph holds the structure (a rationale node and, if present, citations); the text lives outside (krm:contentRef, like all content). Applies to the task as a whole. Until a source base is connected, citations are UNRELIABLE — the carrier is reasoning text; the judge checks its soundness (does it justify the marked correct answer)."@en .
+
+krm:hasRationale a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:TaskTemplate ; rdfs:range krm:AnswerRationale ;
+    rdfs:label "основание ответа"@ru , "has rationale"@en ;
+    rdfs:comment "Связь задания с обоснованием правильности его ответа (одно на задание). Обязательно для НАПИСАННОГО задания (SHACL, как контент — Warning на каркасе сметы)."@ru ,
+        "Links a task to the justification of its correct answer (one per task). Mandatory for an AUTHORED task (SHACL, like content — a Warning on a plan slot)."@en .
+
+krm:cites a owl:ObjectProperty ;
+    rdfs:domain krm:AnswerRationale ; rdfs:range krm:Source ;
+    rdfs:label "цитирует источник"@ru , "cites"@en ;
+    rdfs:comment "Ссылка обоснования на конкретный источник — когда база источников доступна. Сейчас опционально/ненадёжно (база не подключена); основной носитель обоснования — текст (krm:contentRef)."@ru ,
+        "The rationale's reference to a specific source — when a source base is available. Currently optional/unreliable (no base connected); the rationale's main carrier is text (krm:contentRef)."@en .
+
+krm:criterionWeight a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:RubricCriterion ; rdfs:range xsd:decimal ;
+    rdfs:label "вклад критерия"@ru , "criterion weight"@en .
+
+krm:timeLimitMs a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:TestCase ; rdfs:range xsd:integer ;
+    rdfs:label "лимит времени, мс"@ru , "time limit, ms"@en .
+
+krm:memoryLimitMb a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:TestCase ; rdfs:range xsd:integer ;
+    rdfs:label "лимит памяти, МБ"@ru , "memory limit, MB"@en .
+
+krm:isEdgeCase a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:TestCase ; rdfs:range xsd:boolean ;
+    rdfs:label "краевой случай"@ru , "is edge case"@en .
+
+############################ СПРАВОЧНИКИ (SKOS) ############################
+
+krm:resultTypes a skos:ConceptScheme ; rdfs:label "Типы результата"@ru , "Result types"@en .
+krm:RT_Know a skos:Concept ; skos:inScheme krm:resultTypes ; skos:prefLabel "знать"@ru , "know"@en .
+krm:RT_Do   a skos:Concept ; skos:inScheme krm:resultTypes ; skos:prefLabel "уметь"@ru , "can do"@en .
+
+# Контуры проверки НЕ хранятся на задании (выводятся из типа), но нужны как словарь:
+# на ответе (krm:checkedByContour, модуль assessment) и в квотах политики сборки (krm:Quota).
+krm:checkContours a skos:ConceptScheme ; rdfs:label "Контуры проверки"@ru , "Check contours"@en .
+krm:CC_Auto   a skos:Concept ; skos:inScheme krm:checkContours ; skos:prefLabel "автоматизированная"@ru , "automated"@en ;
+    skos:definition "Проверяется без участия человека: выбор одного, выбор нескольких, код (автотесты). Классы krm:AutoCheckedTask."@ru .
+krm:CC_Expert a skos:Concept ; skos:inScheme krm:checkContours ; skos:prefLabel "экспертная"@ru , "expert"@en ;
+    skos:definition "Проверяется экспертом: только открытый текстовый ответ. Класс krm:ExpertCheckedTask."@ru .
+
+krm:generationModes a skos:ConceptScheme ; rdfs:label "Сценарии порождения"@ru , "Generation modes"@en .
+krm:GM_Seed  a skos:Concept ; skos:inScheme krm:generationModes ; skos:prefLabel "детерминированный (seed)"@ru , "deterministic (seed)"@en .
+krm:GM_Agent a skos:Concept ; skos:inScheme krm:generationModes ; skos:prefLabel "агентный"@ru , "agentic"@en .
+
+############################ КЛЮЧИ ############################
+
+krm:GeneralDescriptor owl:hasKey ( krm:code ) .
+krm:Descriptor        owl:hasKey ( krm:code ) .
+krm:TaskTemplate      owl:hasKey ( krm:code ) .
+krm:TaskVariant       owl:hasKey ( krm:code ) .

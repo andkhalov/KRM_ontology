@@ -1,0 +1,170 @@
+# datasets.ttl — Датасеты как объекты исследования (переиспользуемые ресурсы заданий).
+# Принцип: датасет описывается ОДИН раз (описание + ссылка на хранимый артефакт, не байты) и
+# переиспользуется множеством заданий через РАКУРСЫ (DatasetPerspective) — один датасет в разных
+# ракурсах является предметом многих заданий. Хранить/обрабатывать датасеты дорого, поэтому в графе —
+# только метаданные, достаточные для генерации заданий, и ссылка на артефакт.
+# Импортирует definitions (вся схема + верхняя таксономия). Аннотации ru/en.
+
+@prefix krm:  <http://example.org/krm#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix dct:  <http://purl.org/dc/terms/> .
+
+<http://example.org/krm/datasets> a owl:Ontology ;
+    dct:title "Датасеты как объекты исследования"@ru , "Datasets as study objects"@en ;
+    rdfs:label "Датасеты (datasets)"@ru , "Datasets (datasets)"@en ;
+    owl:versionInfo "1.0.0" ;
+    owl:imports <http://example.org/krm/definitions> ;
+    dct:description "Переиспользуемый объект исследования (датасет) с описанием и ссылкой на хранимый артефакт; признаки (schema) для генерации; ракурсы (perspective) — один датасет под множество заданий с разных аналитических углов."@ru ,
+        "A reusable study object (dataset) with a description and a reference to the stored artefact; features (schema) for generation; perspectives — one dataset feeding many tasks from different analytic angles."@en .
+
+############################ ДАТАСЕТ (ОБЪЕКТ ИССЛЕДОВАНИЯ) ############################
+
+krm:Dataset a owl:Class ;
+    rdfs:label "Датасет (объект исследования)"@ru , "Dataset (study object)"@en ;
+    rdfs:comment "Переиспользуемый объект исследования: описание (формат, предметная область, размер, признаки, источник, лицензия) и ссылка на хранимый артефакт (krm:accessRef). В графе — метаданные, не сами данные. Переиспользуется многими заданиями через ракурсы (krm:DatasetPerspective); это снижает стоимость хранения/обработки. Для пилота — небольшие датасеты (контроль размера в SHACL)."@ru ,
+        "A reusable study object: a description (format, subject domain, size, features, source, license) and a reference to the stored artefact (krm:accessRef). The graph holds metadata, not the data itself. Reused by many tasks via perspectives (krm:DatasetPerspective); this cuts storage/processing cost. For the pilot — small datasets (size checked in SHACL)."@en .
+
+krm:datasetFormat a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Dataset ; rdfs:range skos:Concept ;
+    rdfs:label "формат датасета"@ru , "dataset format"@en ;
+    rdfs:comment "Табличный / временной ряд / текст / изображения / граф (SKOS krm:datasetFormats)."@ru ,
+        "Tabular / time series / text / images / graph (SKOS krm:datasetFormats)."@en .
+
+krm:datasetDomain a owl:ObjectProperty ;
+    rdfs:domain krm:Dataset ; rdfs:range krm:Subject ;
+    rdfs:label "предметная область датасета"@ru , "dataset subject domain"@en ;
+    rdfs:comment "Предмет знания (ПЗ), к которому относится датасет; тот же справочник, что и ПЗ профиля."@ru ,
+        "The subject of knowledge (ПЗ) the dataset belongs to; the same vocabulary as profile subjects."@en .
+
+krm:rowCount a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Dataset ; rdfs:range xsd:integer ;
+    rdfs:label "число строк/записей"@ru , "row/record count"@en ;
+    rdfs:comment "Размер датасета в записях; известный размер обязателен (SHACL), для пилота держим небольшим."@ru ,
+        "Dataset size in records; a known size is required (SHACL), kept small for the pilot."@en .
+
+krm:sizeBytes a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Dataset ; rdfs:range xsd:integer ;
+    rdfs:label "размер, байт"@ru , "size, bytes"@en .
+
+krm:datasetSource a owl:ObjectProperty ;
+    rdfs:domain krm:Dataset ; rdfs:range krm:Source ;
+    rdfs:label "источник датасета"@ru , "dataset source"@en ;
+    rdfs:comment "Происхождение датасета (переиспользует справочник источников krm:Source)."@ru ,
+        "The dataset's origin (reuses the krm:Source vocabulary)."@en .
+
+krm:accessRef a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Dataset ; rdfs:range rdfs:Literal ;
+    rdfs:label "ссылка на артефакт"@ru , "artefact reference"@en ;
+    rdfs:comment "URI/путь к хранимому артефакту датасета (хранится один раз; в графе только ссылка)."@ru ,
+        "A URI/path to the stored dataset artefact (stored once; only the reference lives in the graph)."@en .
+
+krm:license a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:Dataset ; rdfs:range rdfs:Literal ;
+    rdfs:label "лицензия"@ru , "license"@en .
+
+krm:hasFeature a owl:ObjectProperty ;
+    rdfs:domain krm:Dataset ; rdfs:range krm:DatasetFeature ;
+    rdfs:label "признак датасета"@ru , "has feature"@en ;
+    rdfs:comment "Схема датасета: колонки/переменные. Нужна, чтобы генерировать задания, нацеленные на конкретные признаки."@ru ,
+        "The dataset schema: columns/variables. Needed to generate tasks targeting specific features."@en .
+
+############################ ПРИЗНАК ДАТАСЕТА (SCHEMA) ############################
+
+krm:DatasetFeature a owl:Class ;
+    rdfs:label "Признак датасета"@ru , "Dataset feature"@en ;
+    rdfs:comment "Колонка/переменная датасета: имя, тип данных, роль (целевая/предиктор/идентификатор/время). Опора для генерации заданий и для ракурсов."@ru ,
+        "A dataset column/variable: name, data type, role (target/predictor/identifier/time). The basis for task generation and perspectives."@en .
+
+krm:featureName a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:DatasetFeature ; rdfs:range rdfs:Literal ;
+    rdfs:label "имя признака"@ru , "feature name"@en .
+
+krm:featureDataType a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:DatasetFeature ; rdfs:range rdfs:Literal ;
+    rdfs:label "тип данных признака"@ru , "feature data type"@en ;
+    rdfs:comment "Технический тип значения (например, float, int, categorical, datetime)."@ru ,
+        "The technical value type (e.g. float, int, categorical, datetime)."@en .
+
+krm:featureRole a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:DatasetFeature ; rdfs:range skos:Concept ;
+    rdfs:label "роль признака"@ru , "feature role"@en ;
+    rdfs:comment "Целевая / предиктор / идентификатор / время (SKOS krm:featureRoles)."@ru ,
+        "Target / predictor / identifier / time (SKOS krm:featureRoles)."@en .
+
+############################ РАКУРС (ОДИН ДАТАСЕТ — МНОГО ЗАДАНИЙ) ############################
+
+krm:DatasetPerspective a owl:Class ;
+    rdfs:label "Ракурс датасета"@ru , "Dataset perspective"@en ;
+    rdfs:comment "Аналитический угол рассмотрения датасета (например «регрессия по цене», «очистка пропусков», «классификация класса»). У одного датасета — много ракурсов; на ракурсе строятся задания. Это конструкция переиспользования: датасет описан один раз, ракурсы порождают множество заданий."@ru ,
+        "An analytic angle on a dataset (e.g. 'price regression', 'missing-value cleaning', 'class classification'). One dataset has many perspectives; tasks are built on a perspective. The reuse construct: the dataset is described once, perspectives spawn many tasks."@en .
+
+krm:ofDataset a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain krm:DatasetPerspective ; rdfs:range krm:Dataset ;
+    rdfs:label "ракурс датасета"@ru , "of dataset"@en .
+
+krm:targetsFeature a owl:ObjectProperty ;
+    rdfs:domain krm:DatasetPerspective ; rdfs:range krm:DatasetFeature ;
+    rdfs:label "задействует признак"@ru , "targets feature"@en ;
+    rdfs:comment "Признаки, на которые опирается ракурс (например, целевая переменная для регрессии)."@ru ,
+        "The features the perspective relies on (e.g. the target variable for regression)."@en .
+
+krm:analyticTaskKind a owl:ObjectProperty ;
+    rdfs:domain krm:DatasetPerspective ; rdfs:range skos:Concept ;
+    rdfs:label "аналитический тип задачи"@ru , "analytic task kind"@en ;
+    rdfs:comment "Какой класс задач закрывает ракурс: регрессия/классификация/кластеризация/EDA/очистка/SQL-запрос/прогноз (SKOS krm:analyticTaskKinds). По нему проверяется покрытие типов задач набором датасетов."@ru ,
+        "Which class of tasks the perspective covers: regression/classification/clustering/EDA/cleaning/SQL-query/forecast (SKOS krm:analyticTaskKinds). Used to check task-type coverage by the dataset set."@en .
+
+krm:perspectiveDescription a owl:DatatypeProperty ;
+    rdfs:domain krm:DatasetPerspective ; rdfs:range rdfs:Literal ;
+    rdfs:label "описание ракурса"@ru , "perspective description"@en ;
+    rdfs:comment "Текст ракурса — материал для генерации задания агентом."@ru ,
+        "The perspective text — material for agent task generation."@en .
+
+############################ ПРИВЯЗКА ЗАДАНИЯ К ДАТАСЕТУ/РАКУРСУ ############################
+
+krm:usesDataset a owl:ObjectProperty ;
+    rdfs:domain krm:TaskTemplate ; rdfs:range krm:Dataset ;
+    rdfs:label "использует датасет"@ru , "uses dataset"@en ;
+    rdfs:comment "Шаблон задания опирается на переиспользуемый датасет (многие задания → один датасет). Сам датасет подаётся в среду выполнения задания."@ru ,
+        "A task template relies on a reusable dataset (many tasks → one dataset). The dataset is supplied into the task's execution environment."@en .
+
+krm:usesPerspective a owl:ObjectProperty ;
+    rdfs:domain krm:TaskTemplate ; rdfs:range krm:DatasetPerspective ;
+    rdfs:label "использует ракурс"@ru , "uses perspective"@en ;
+    rdfs:comment "Шаблон задания строится на ракурсе датасета (конкретный аналитический угол)."@ru ,
+        "A task template is built on a dataset perspective (a specific analytic angle)."@en .
+
+# Использование ракурса влечёт использование его датасета: usesPerspective ∘ ofDataset ⊑ usesDataset.
+krm:usesDataset owl:propertyChainAxiom ( krm:usesPerspective krm:ofDataset ) .
+
+############################ СПРАВОЧНИКИ (SKOS) ############################
+
+krm:datasetFormats a skos:ConceptScheme ; rdfs:label "Форматы датасетов"@ru , "Dataset formats"@en .
+krm:DF_Tabular    a skos:Concept ; skos:inScheme krm:datasetFormats ; skos:prefLabel "табличный"@ru , "tabular"@en .
+krm:DF_TimeSeries a skos:Concept ; skos:inScheme krm:datasetFormats ; skos:prefLabel "временной ряд"@ru , "time series"@en .
+krm:DF_Text       a skos:Concept ; skos:inScheme krm:datasetFormats ; skos:prefLabel "текст"@ru , "text"@en .
+krm:DF_Image      a skos:Concept ; skos:inScheme krm:datasetFormats ; skos:prefLabel "изображения"@ru , "images"@en .
+krm:DF_Graph      a skos:Concept ; skos:inScheme krm:datasetFormats ; skos:prefLabel "граф"@ru , "graph"@en .
+
+krm:featureRoles a skos:ConceptScheme ; rdfs:label "Роли признаков"@ru , "Feature roles"@en .
+krm:FR_Target     a skos:Concept ; skos:inScheme krm:featureRoles ; skos:prefLabel "целевая"@ru , "target"@en .
+krm:FR_Predictor  a skos:Concept ; skos:inScheme krm:featureRoles ; skos:prefLabel "предиктор"@ru , "predictor"@en .
+krm:FR_Identifier a skos:Concept ; skos:inScheme krm:featureRoles ; skos:prefLabel "идентификатор"@ru , "identifier"@en .
+krm:FR_Timestamp  a skos:Concept ; skos:inScheme krm:featureRoles ; skos:prefLabel "метка времени"@ru , "timestamp"@en .
+
+krm:analyticTaskKinds a skos:ConceptScheme ; rdfs:label "Аналитические типы задач"@ru , "Analytic task kinds"@en .
+krm:AK_Regression     a skos:Concept ; skos:inScheme krm:analyticTaskKinds ; skos:prefLabel "регрессия"@ru , "regression"@en .
+krm:AK_Classification a skos:Concept ; skos:inScheme krm:analyticTaskKinds ; skos:prefLabel "классификация"@ru , "classification"@en .
+krm:AK_Clustering     a skos:Concept ; skos:inScheme krm:analyticTaskKinds ; skos:prefLabel "кластеризация"@ru , "clustering"@en .
+krm:AK_EDA            a skos:Concept ; skos:inScheme krm:analyticTaskKinds ; skos:prefLabel "разведочный анализ"@ru , "exploratory analysis"@en .
+krm:AK_Cleaning       a skos:Concept ; skos:inScheme krm:analyticTaskKinds ; skos:prefLabel "очистка/предобработка"@ru , "cleaning/preprocessing"@en .
+krm:AK_SQLQuery       a skos:Concept ; skos:inScheme krm:analyticTaskKinds ; skos:prefLabel "SQL-запрос"@ru , "SQL query"@en .
+krm:AK_Forecasting    a skos:Concept ; skos:inScheme krm:analyticTaskKinds ; skos:prefLabel "прогнозирование"@ru , "forecasting"@en .
+
+############################ КЛЮЧ ############################
+
+krm:Dataset owl:hasKey ( krm:code ) .
